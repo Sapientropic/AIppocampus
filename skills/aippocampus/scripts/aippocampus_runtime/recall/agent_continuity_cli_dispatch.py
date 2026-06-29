@@ -55,6 +55,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     macro_schema_help,
     macro_state_template,
     missing_feedback_route_payload,
+    missing_handle_payload,
     opened_route_keys_from_last_recall_cache,
     public_recall_projection,
     query_from_last_recall_cache,
@@ -81,6 +82,7 @@ def _run_recall_command(args: Namespace, json_out: JsonOut) -> int:
         payload = agent_recall_missing_query_payload(
             schema_version=SCHEMA_VERSION,
             kind=KIND,
+            detail=args.detail,
         )
         if args.json:
             json_out(payload)
@@ -320,6 +322,34 @@ def _run_deepen_command(args: Namespace, json_out: JsonOut) -> int:
             json_out(recovery_payload)
         else:
             print(render_deepen_human(recovery_payload))
+        return 2
+    if handle is None:
+        payload = missing_handle_payload(
+            mode="deepen",
+            schema_version=SCHEMA_VERSION,
+            kind=KIND,
+            detail=args.detail,
+        )
+        if args.json:
+            if args.detail == "full":
+                payload = {
+                    "detail": "full",
+                    "output_boundary": "local_private_diagnostic_full",
+                    **payload,
+                }
+            else:
+                payload = dict(
+                    compact_agent_deepen_payload(
+                        payload,
+                        request_index=request_index,
+                        last_recall=request_index is not None,
+                        recall_selector=str(args.recall_selector or ""),
+                        surface="agent_cli_source_court_compact",
+                    )
+                )
+            json_out(payload)
+        else:
+            print(render_deepen_human(payload))
         return 2
     payload = deepen(
         handle,

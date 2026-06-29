@@ -243,7 +243,10 @@ def tool_readiness_summary(*, detail: str = "compact") -> dict[str, Any]:
             mutation_risk="read_only",
             claim_boundary="no_claim_before_reopen",
         )
-        payload["tool_use_guide"] = _tool_use_guide(detail=detail)
+        if detail == "full":
+            payload["tool_use_guide"] = _tool_use_guide(detail=detail)
+        else:
+            payload["details_available"] = True
         payload.update(
             canonical_foreground_action_fields(
                 primary,

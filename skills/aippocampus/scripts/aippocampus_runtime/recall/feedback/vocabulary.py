@@ -80,6 +80,10 @@ DEFAULT_SIGNAL_DELTAS = {
     "dismissed": -0.9,
     "manual_search_after_route": -1.0,
     "context_suppressed": -0.9,
+    # User corrections mean the route actively misled the user or agent. Keep
+    # this as severe as wrong-route drag so a future alias cannot become a
+    # neutral no-op while still being marked hard-negative.
+    "user_correction": -1.0,
     "blocked": -1.0,
     "superseded": -0.8,
     "parked": -0.35,
@@ -142,6 +146,34 @@ RECALL_OUTCOME_SIGNALS = frozenset(
         "user_reprompted_with_thread_id",
     }
 )
+ACTIVE_FLOW_RECALL_OUTCOME_POLICY = {
+    "source_reopen_success": "source_reopen_success",
+    "user_confirmed": "user_confirmed_helpful",
+    "prevented_failure": "prevented_failure",
+    "reopened_deepened": "deepened",
+    "candidate_delivered": "no_visible_effect",
+    "ignored": "ignored",
+    "wrong_route_drag": "wrong_route_drag",
+    "dismissed": "dismissed_anti_nag",
+    "manual_search_after_route": "requery_after_miss",
+    "context_suppressed": "recall_added_noise",
+    "user_correction": "user_correction",
+    "blocked": "blocked_boundary",
+    "superseded": "superseded",
+    "parked": "no_visible_effect",
+    "privacy_blocked": "blocked_boundary",
+    "stale": "superseded",
+    "off_phase": "no_visible_effect",
+    "needs_refine": "no_visible_effect",
+    "duplicate": "superseded",
+    "expired": "superseded",
+}
+RECALL_OUTCOME_ALIASES = {
+    "confirm": "user_confirmed_helpful",
+    "confirmed": "user_confirmed_helpful",
+    "user_confirmed": "user_confirmed_helpful",
+    "helpful": "user_confirmed_helpful",
+}
 HELPFUL_RECALL_OUTCOME_SIGNALS = frozenset(
     {
         "answer_improved_after_deepen",
@@ -216,14 +248,17 @@ def normalize_recall_outcome_signal(value: Any, *, default: str = "ignored") -> 
     folded = text.casefold()
     if folded in RECALL_OUTCOME_SIGNALS:
         return folded
+    if folded in RECALL_OUTCOME_ALIASES:
+        return RECALL_OUTCOME_ALIASES[folded]
     canonical = normalize_feedback_signal(folded, default="")
-    if canonical in RECALL_OUTCOME_SIGNALS:
-        return canonical
+    if canonical in ACTIVE_FLOW_RECALL_OUTCOME_POLICY:
+        return ACTIVE_FLOW_RECALL_OUTCOME_POLICY[canonical]
     return default
 
 
 __all__ = [
     "ACTIVE_FLOW_SIGNALS",
+    "ACTIVE_FLOW_RECALL_OUTCOME_POLICY",
     "APW_FOLLOWTHROUGH_NEGATIVE_OUTCOMES",
     "APW_FOLLOWTHROUGH_OUTCOME_TO_SIGNAL",
     "APW_FOLLOWTHROUGH_POSITIVE_OUTCOMES",
@@ -239,6 +274,7 @@ __all__ = [
     "PARKED_FEEDBACK_SIGNALS",
     "POSITIVE_FEEDBACK_SIGNALS",
     "RECALL_OUTCOME_SIGNALS",
+    "RECALL_OUTCOME_ALIASES",
     "SURFACE_FEEDBACK_SIGNALS",
     "default_signal_delta",
     "feedback_signal_is_negative",

@@ -153,5 +153,22 @@ class MacroStageTrackerTests(unittest.TestCase):
         self.assertNotIn("PRIVATE", encoded)
         self.assertNotIn("C:\\", encoded)
 
+    def test_user_correction_delta_shapes_momentum_summary(self) -> None:
+        event = _source_event("correction", "蹇", support_delta=0.0)
+        event["user_correction_delta"] = 1.0
+
+        update = stage_tracker.build_stage_update(
+            project="AIppocampus",
+            previous="蹇",
+            source_events=[event],
+        )
+
+        momentum = update["momentum"]
+        self.assertEqual(momentum["phase_hint"], "declining")
+        self.assertEqual(momentum["basis"]["user_correction_delta"], 1.0)
+        self.assertEqual(momentum["trend"]["friction_delta"], 1.0)
+        self.assertEqual(momentum["trend"]["net_delta"], -1.0)
+        self.assertNotEqual(momentum["phase_hint"], "hibernating")
+
 if __name__ == "__main__":
     unittest.main()

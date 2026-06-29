@@ -136,9 +136,10 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             "小海马体需要 source-backed continuity。",
         )
         self.assertEqual(
-            compact_payload["primary_source_snippet"]["claim_boundary"],
-            "exact_wording_inside_this_snippet_only",
+            compact_payload["primary_source_snippet"]["source_scope"],
+            "opened_window_primary_message",
         )
+        self.assertNotIn("claim_boundary", compact_encoded)
         self.assertNotIn("carry_next_actions", compact_payload)
         self.assertNotIn("choose_export_for_next_thread", compact_encoded)
         self.assertNotIn("choose_sync_for_next_device", compact_encoded)
@@ -265,10 +266,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         )
         self.assertEqual(action_payload["source_open_posture"], "source_opened_adjacent_evidence")
         self.assertIn("primary_source_snippet", action_payload)
-        self.assertEqual(
-            compact_payload["claim_boundary"],
-            "navigation_only_until_source_reopened",
-        )
+        self.assertNotIn("claim_boundary", compact_payload)
         self.assertIn("--detail full", compact_payload["detail_command"])
         self.assertNotIn("macro_navigation_diagnostics", compact_payload)
         self.assertNotIn("cannot_claim", compact_encoded)
@@ -276,6 +274,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertNotIn(str(self.cwd), compact_encoded)
 
         self.assertEqual(full_payload["detail"], "full")
+        self.assertEqual(full_payload["output_boundary"], "local_private_diagnostic_full")
         self.assertIn("explanation", full_payload)
         self.assertIn("macro_navigation_diagnostics", full_payload)
         self.assertIn("cannot_claim", full_payload["explanation"])

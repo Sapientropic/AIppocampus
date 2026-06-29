@@ -1018,6 +1018,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertTrue(payload["agent_native_tools_present"])
         self.assertIn("agent_recall", payload["key_tools_present"])
         self.assertEqual(payload["full_schema_command"], "aippocampus mcp list-tools --json")
+        self.assertNotIn("tool_use_guide", payload)
+        self.assertTrue(payload["details_available"])
+        self.assertLess(len(proc.stdout), 2400)
 
     def test_mcp_status_is_compact_readiness_alias(self) -> None:
         proc = self.run_cli("mcp", "status")
@@ -1027,6 +1030,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_mcp_tool_readiness")
         self.assertIn("agent_recall", payload["key_tools_present"])
         self.assertNotIn("tools", payload)
+        self.assertNotIn("tool_use_guide", payload)
+        self.assertTrue(payload["details_available"])
+        self.assertLess(len(proc.stdout), 2400)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("record_route_feedback_cli_fallback", encoded)
         self.assertNotIn("durable_low_authority_feedback_write", encoded)

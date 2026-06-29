@@ -901,7 +901,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         compact_encoded = json.dumps(compact_payload, ensure_ascii=False)
 
         self.assertEqual(compact_payload["match_count"], 1)
-        self.assertEqual(compact_payload["source_hits"][0]["source_count"], 2)
+        self.assertNotIn("source_count", compact_payload["source_hits"][0])
         self.assertNotIn("matches", compact_payload)
         self.assertNotIn("duplicate_source_refs", compact_encoded)
 

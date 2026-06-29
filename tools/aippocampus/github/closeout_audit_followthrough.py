@@ -8,6 +8,7 @@ traceability path does not keep growing the main audit script.
 
 from __future__ import annotations
 
+import http.client
 import json
 import re
 import subprocess
@@ -262,7 +263,13 @@ def fetch_github_issue_metadata(
         try:
             with urllib.request.urlopen(request, timeout=15) as response:
                 payload = json.loads(response.read().decode("utf-8"))
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            json.JSONDecodeError,
+            http.client.HTTPException,
+            ConnectionError,
+        ):
             fallback = _fetch_github_issue_metadata_with_gh(repo=repo, number=number)
             if fallback is not None:
                 out[number] = fallback

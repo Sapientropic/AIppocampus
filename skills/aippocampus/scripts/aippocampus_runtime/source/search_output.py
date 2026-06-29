@@ -13,6 +13,7 @@ from aippocampus_runtime.contracts import (
     shell_quote,
 )
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.foreground_compact_language import strip_compact_policy_vocabulary
 from aippocampus_runtime.privacy import (
     LOCAL_PATH_REDACTION,
     redact_private_paths,
@@ -417,13 +418,6 @@ def _compact_public_search_result(
             )
             for index, match in enumerate(original_matches, start=1)
         ],
-        "claim_boundary": authority.get("claim_permission")
-        or "source_reopen_required_before_claims",
-        "source_reopen_boundary": (
-            "reopen_selected_match_before_exact_or_sensitive_claims"
-            if original_matches
-            else "search_miss_is_not_absence_of_memory"
-        ),
         "foreground_action": authority.get("foreground_action") or {},
     }
     capped_public_snippets_emitted = any(
@@ -473,6 +467,7 @@ def _compact_public_search_result(
                 safe_next_read_only_only=True,
             )
         )
+    payload = strip_compact_policy_vocabulary(payload)
     return payload if include_paths else redact_sensitive_values(redact_private_paths(payload))
 
 

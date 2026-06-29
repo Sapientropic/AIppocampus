@@ -39,6 +39,22 @@ CHECK_TOOLING_PATHS = {
     "tools/aippocampus/release_preflight_plan.py",
     "tools/aippocampus/github/guard_only_closeout_policy.py",
 }
+CLOSEOUT_AUDIT_TOOL_PATHS = frozenset(
+    {
+        "tools/aippocampus/github/closeout_audit.py",
+        "tools/aippocampus/github/closeout_audit_followthrough.py",
+    }
+)
+PRODUCER_CONSUMER_CONTRACT_SURFACES = frozenset(
+    {
+        "skills/aippocampus/scripts/aippocampus_runtime/source/agent_trace_admission.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/source/agent_trace_receipts.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/source/agent_trace_families.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback/vocabulary.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback/events.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback/suppression_lifecycle.py",
+    }
+)
 APW_PARITY_SURFACES = frozenset(
     {
         "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_inputs.py",
@@ -515,6 +531,10 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
                 "tools/aippocampus/github/guard_only_closeout_policy.py",
             }:
             categories.add("test_runner")
+        if path in CLOSEOUT_AUDIT_TOOL_PATHS:
+            categories.add("closeout_audit_tooling")
+        if path in PRODUCER_CONSUMER_CONTRACT_SURFACES:
+            categories.add("producer_consumer_contracts")
         if (
             path
             in {
@@ -865,6 +885,43 @@ def build_test_plan(
                     "advisory JSON output, and planner integration directly."
                 ),
                 scope="focused:agent-slop-guard",
+            ),
+        )
+
+    if "closeout_audit_tooling" in categories:
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=py_command(
+                    "-m unittest tests.aippocampus.test_closeout_audit -v",
+                    local_executable=local_executable,
+                ),
+                reason=(
+                    "Closeout-audit tooling changes must run the PR-body closeout "
+                    "contract tests before agents rely on local preflight or CI to "
+                    "accept issue closure evidence."
+                ),
+                scope="focused",
+            ),
+        )
+
+    if "producer_consumer_contracts" in categories:
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=py_command(
+                    "-m unittest "
+                    "tests.aippocampus.test_feedback_vocabulary "
+                    "tests.aippocampus.test_recall_feedback_events "
+                    "tests.aippocampus.test_agent_trace_admission -v",
+                    local_executable=local_executable,
+                ),
+                reason=(
+                    "Trace-admission and feedback vocabulary changes must prove "
+                    "producer/consumer field and signal contracts together, so "
+                    "hand-authored fixture fields cannot masquerade as runtime producers."
+                ),
+                scope="focused",
             ),
         )
 

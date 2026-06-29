@@ -65,6 +65,8 @@ def registry_search_memory_payload(
         limit=limit,
         include_paths=include_paths,
         search_budget=str(arguments.get("search_budget") or "default"),
+        detail=str(arguments.get("detail") or "compact"),
+        public_output=bool(arguments.get("public") or arguments.get("metadata_only")),
         record_last_search=False,
         cwd=cwd,
         max_elapsed_ms=_int_range(

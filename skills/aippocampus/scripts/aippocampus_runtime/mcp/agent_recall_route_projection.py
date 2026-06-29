@@ -104,16 +104,39 @@ def _is_associative_path_route(packet: Mapping[str, Any]) -> bool:
     )
 
 
-def _route_source_anchor_gate_blocks_reopen(packet: Mapping[str, Any]) -> bool:
-    gate = packet.get("source_anchor_gate")
+def source_anchor_gate_blocks_reopen(gate: Any) -> bool:
+    """Return whether source-anchor validation blocks using a reopen route."""
+
     gate_map = gate if isinstance(gate, Mapping) else {}
     if str(gate_map.get("status") or "").strip() == "blocked":
         return True
     if gate_map.get("target_source_matched") is False:
         return True
+    return False
+
+
+def route_source_anchor_gate_blocks_reopen(packet: Mapping[str, Any]) -> bool:
+    """Return whether a route must stay navigation-only after source-anchor validation.
+
+    Several compact projections can see a route-shaped packet after the source
+    anchor gate has already proved that opening it did not match the cue. Keep
+    this decision in one place so later foreground promotions cannot accidentally
+    turn a blocked route back into the primary action.
+    """
+
+    if source_anchor_gate_blocks_reopen(packet.get("source_anchor_gate")):
+        return True
     if packet.get("recommended_evidence_route") is False:
         return True
     return False
+
+
+def anchor_gate_blocks_reopen(gate: Any) -> bool:
+    return source_anchor_gate_blocks_reopen(gate)
+
+
+def route_anchor_gate_blocks_reopen(packet: Mapping[str, Any]) -> bool:
+    return route_source_anchor_gate_blocks_reopen(packet)
 
 
 def request_reopenability_by_index_from_requests(raw_requests: Any) -> dict[int, bool]:
@@ -164,7 +187,7 @@ def _route_is_callable(
         return False
     if request_reopenability_by_index is not None and request_index in request_reopenability_by_index:
         return bool(request_reopenability_by_index[request_index])
-    if _route_source_anchor_gate_blocks_reopen(packet):
+    if route_source_anchor_gate_blocks_reopen(packet):
         return False
     if str(packet.get("output_mode") or "") == "reopenable_route":
         return True

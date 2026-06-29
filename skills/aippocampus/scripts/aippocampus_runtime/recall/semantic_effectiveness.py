@@ -6,6 +6,9 @@ promotion/demotion inside the same scope bucket, but it never mutates clean
 source, runtime weights, or claim permission.
 """
 
+# aippocampus-instruction-surface: semantic effectiveness ledger owner; feedback
+# adjusts navigation pressure only, never source truth.
+
 from __future__ import annotations
 
 import hashlib
@@ -119,10 +122,10 @@ def _bounded_delta(counts: Counter[str], event_count: int) -> tuple[float, bool,
     positive = sum(count for outcome, count in counts.items() if feedback_signal_is_positive(outcome))
     negative = sum(count for outcome, count in counts.items() if feedback_signal_is_negative(outcome))
     sparse = event_count < 2
-    conflicting = positive > 0 and negative > 0
+    raw = positive - negative
+    conflicting = positive > 0 and negative > 0 and raw == 0
     if sparse or conflicting:
         return 0.0, sparse, conflicting
-    raw = positive - negative
     return round(max(-1.0, min(1.0, raw / max(1, event_count))), 6), sparse, conflicting
 
 
@@ -271,6 +274,64 @@ def load_semantic_effectiveness_rows(path: Path) -> list[dict[str, Any]]:
     return [dict(item) for item in load_jsonl_dict_rows(path).rows if item.get("kind") == ROW_KIND]
 
 
+def _ledger_row_outcome_counts(row: Mapping[str, Any]) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    raw_counts = row.get("outcome_counts")
+    if isinstance(raw_counts, Mapping):
+        for outcome, raw_count in raw_counts.items():
+            try:
+                count = int(raw_count or 0)
+            except (TypeError, ValueError):
+                count = 0
+            if count > 0:
+                counts[str(outcome)] += count
+    if counts:
+        return counts
+    recommendation = str(row.get("recommendation") or "")
+    if recommendation == "promote_for_routing":
+        counts["source_reopen_success"] += 2
+    elif recommendation in {"demote", "archive", "scope_local_only_no_public_promotion"}:
+        counts["wrong_route_drag"] += 2
+    return counts
+
+
+def _aggregate_semantic_effectiveness_rows(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    bucket: str,
+) -> dict[str, Any]:
+    """Apply append-only semantic feedback as cumulative same-scope pressure.
+
+    Semantic effectiveness rows are durable observations. The routing consumer
+    must not treat them as a latest-state table, because a later positive batch
+    would erase earlier wrong-route drag exactly where candidate priority is
+    decided. A later net-positive history can still recover the candidate.
+    """
+
+    counts: Counter[str] = Counter()
+    for row in rows:
+        counts.update(_ledger_row_outcome_counts(row))
+    event_count = sum(counts.values())
+    delta, sparse, conflicting = _bounded_delta(counts, event_count)
+    recommendation = _recommendation(
+        delta,
+        counts,
+        sparse=sparse,
+        conflicting=conflicting,
+        bucket=bucket,
+    )
+    return {
+        "recommendation": recommendation,
+        "bounded_route_delta": delta,
+        "outcome_counts": dict(sorted(counts.items())),
+        "ledger_row_count": len(rows),
+        "event_count": event_count,
+        "sparse_feedback_fallback": sparse,
+        "conflicting_feedback_fallback": conflicting,
+        "aggregate_policy": "bounded_cumulative_same_scope_feedback",
+    }
+
+
 def apply_semantic_effectiveness_to_candidates(
     candidates: Iterable[Mapping[str, Any]],
     ledger_rows: Iterable[Mapping[str, Any]],
@@ -282,14 +343,18 @@ def apply_semantic_effectiveness_to_candidates(
     ignored so a private/project correction cannot become a global mask.
     """
 
-    latest: dict[tuple[str, str], Mapping[str, Any]] = {}
+    rows_by_candidate: dict[tuple[str, str], list[Mapping[str, Any]]] = defaultdict(list)
     for row in ledger_rows:
         if not isinstance(row, Mapping) or row.get("kind") != ROW_KIND:
             continue
         candidate_id = _event_candidate_id(row)
         bucket = _bucket(row.get("scope_bucket") or row.get("privacy_partition"))
         if candidate_id:
-            latest[(bucket, candidate_id)] = row
+            rows_by_candidate[(bucket, candidate_id)].append(row)
+    aggregates = {
+        key: _aggregate_semantic_effectiveness_rows(rows, bucket=key[0])
+        for key, rows in rows_by_candidate.items()
+    }
 
     projected: list[dict[str, Any]] = []
     for candidate in candidates:
@@ -298,7 +363,7 @@ def apply_semantic_effectiveness_to_candidates(
         copy = dict(candidate)
         candidate_id = _candidate_id(copy)
         bucket = _bucket(copy.get("scope_bucket") or copy.get("privacy_partition"))
-        row = latest.get((bucket, candidate_id))
+        row = aggregates.get((bucket, candidate_id))
         if not row:
             projected.append(copy)
             continue
@@ -308,6 +373,9 @@ def apply_semantic_effectiveness_to_candidates(
         copy["effectiveness_scope_bucket"] = bucket
         copy["navigation_priority_delta"] = row.get("bounded_route_delta")
         copy["semantic_effectiveness_applied"] = True
+        copy["semantic_effectiveness_ledger_row_count"] = row.get("ledger_row_count")
+        copy["semantic_effectiveness_event_count"] = row.get("event_count")
+        copy["semantic_effectiveness_aggregate_policy"] = row.get("aggregate_policy")
         if recommendation in {"demote", "archive", "scope_local_only_no_public_promotion"}:
             copy["status"] = "demoted" if recommendation == "demote" else "blocked"
             copy["freshness"] = "stale" if recommendation in {"demote", "archive"} else copy.get("freshness")

@@ -827,11 +827,6 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["kind"], "aippocampus_search_result")
         self.assertEqual(payload["detail"], "compact")
-        self.assertEqual(payload["claim_boundary"], "bounded_search_receipt_requires_reopen")
-        self.assertEqual(
-            payload["source_reopen_boundary"],
-            "reopen_selected_match_before_exact_or_sensitive_claims",
-        )
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
         self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
@@ -848,9 +843,12 @@ class SearchCleanSourceTests(unittest.TestCase):
             payload["matches"][0]["reopen_command"],
             payload["foreground_action"]["command"],
         )
-        self.assertNotIn("query_match_profile", json.dumps(payload, ensure_ascii=False))
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("query_match_profile", encoded)
+        self.assertNotIn("claim_boundary", encoded)
+        self.assertNotIn("source_reopen_boundary", encoded)
+        self.assertNotIn("source_boundary", encoded)
         self.assertNotIn("jsonl_loss", payload)
-        self.assertEqual(payload["foreground_action"]["claim_boundary"], "source_reopen_required_before_claim")
         self.assertEqual(foreground_action_contract_violations(payload), [])
         self.assertIn("matches", payload)
 
@@ -920,11 +918,6 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "no_matches")
-        self.assertEqual(payload["claim_boundary"], "no_claim_before_source_match")
-        self.assertEqual(
-            payload["source_reopen_boundary"],
-            "search_miss_is_not_absence_of_memory",
-        )
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
         self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
@@ -932,6 +925,9 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertNotIn("action_id", payload["foreground_action"])
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertNotIn("source_boundary", payload)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("claim_boundary", encoded)
+        self.assertNotIn("source_reopen_boundary", encoded)
         self.assertNotIn("recovery_actions", payload)
         self.assertEqual(payload["fallback_command_template"], 'aippocampus agent recall "{cue}" --json')
         self.assertEqual(foreground_action_contract_violations(payload), [])
@@ -1120,18 +1116,11 @@ class SearchCleanSourceTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+        query = "cross-thread exact registry phrase"
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
             code = search.main(
-                [
-                    "--all",
-                    "cross-thread exact registry phrase",
-                    "--registry-dir",
-                    str(self.cwd),
-                    "--cwd",
-                    str(self.cwd),
-                    "--json",
-                ]
+                ["--all", query, "--registry-dir", str(self.cwd), "--cwd", str(self.cwd), "--json"]
             )
         payload = json.loads(stdout.getvalue())
 
@@ -1140,13 +1129,10 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_registry_source_search")
         self.assertEqual(payload["search_scope"], "registered_clean_source_and_indexes")
         self.assertEqual(payload["match_count"], 2)
-        self.assertEqual(
-            {match["thread"]["thread_key"] for match in payload["matches"]},
-            {"session:two", "session:three"},
-        )
+        self.assertEqual(len(payload["matches"]), 2)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn(str(self.cwd), encoded)
-        self.assertEqual(payload["registry"], search.LOCAL_PATH_REDACTION)
+        self.assertNotIn("registry", payload)
         self.assertNotIn("privacy", payload)
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
@@ -1159,29 +1145,36 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertNotIn("query_match_gate", payload)
         self.assertIn("detail_command", payload)
         self.assertIn("--open-source", payload["matches"][0]["reopen_command"])
-        self.assertEqual(
-            payload["matches"][0]["reopen_command"],
-            payload["matches"][0]["source_window_command"],
-        )
-        self.assertEqual(
-            payload["matches"][0]["last_search_reopen_command"],
-            "aippocampus search --hit 1 --last-search --json",
-        )
-        self.assertIn("source_window_command", payload["matches"][0])
+        self.assertNotIn("source_window_command", payload["matches"][0])
+        self.assertNotIn("last_search_reopen_command", payload["matches"][0])
+        self.assertLessEqual(len(payload), 18)
         self.assertEqual(foreground_action_contract_violations(payload), [])
+
+        public_stdout = io.StringIO()
+        with contextlib.redirect_stdout(public_stdout):
+            public_code = search.main(
+                [
+                    "--all", query, "--registry-dir", str(self.cwd), "--cwd", str(self.cwd),
+                    "--public", "--json",
+                ]
+            )
+        public_payload = json.loads(public_stdout.getvalue())
+        public_encoded = json.dumps(public_payload, ensure_ascii=False)
+
+        self.assertEqual(public_code, 0)
+        self.assertTrue(public_payload["public_output"])
+        self.assertLess(len(public_encoded), len(encoded))
+        self.assertEqual(public_payload["foreground_action"]["id"], "rerun_registry_search_locally")
+        self.assertNotIn("message_id", public_encoded)
+        self.assertNotIn("hit_selector", public_encoded)
+        self.assertNotIn("--open-source", public_encoded)
 
         reopen_stdout = io.StringIO()
         with contextlib.redirect_stdout(reopen_stdout):
             reopen_code = search.main(
                 [
-                    "--hit",
-                    "1",
-                    "--last-search",
-                    "--registry-dir",
-                    str(self.cwd),
-                    "--cwd",
-                    str(self.cwd),
-                    "--json",
+                    "--hit", "1", "--last-search", "--registry-dir", str(self.cwd),
+                    "--cwd", str(self.cwd), "--detail", "full", "--json",
                 ]
             )
         reopened = json.loads(reopen_stdout.getvalue())
@@ -1191,7 +1184,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertTrue(reopened["metrics"]["source_reopen_success"])
         self.assertEqual(reopened["source_boundary"]["authority"], "source_open")
         self.assertIn(
-            "cross-thread exact registry phrase",
+            query,
             json.dumps(reopened["source_window"], ensure_ascii=False),
         )
         self.assertNotIn(str(self.cwd), json.dumps(reopened, ensure_ascii=False))
@@ -1251,6 +1244,8 @@ class SearchCleanSourceTests(unittest.TestCase):
                     str(self.cwd),
                     "--cwd",
                     str(self.cwd),
+                    "--detail",
+                    "full",
                     "--json",
                 ]
             )
@@ -1408,6 +1403,8 @@ class SearchCleanSourceTests(unittest.TestCase):
                     str(self.cwd),
                     "--cwd",
                     str(self.cwd),
+                    "--detail",
+                    "full",
                     "--json",
                 ]
             )
@@ -1533,7 +1530,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(payload["matches"][0]["source"], "repo_checkout_doc")
         self.assertIn("docs/architecture/ops/compatibility-shim-inventory.md", encoded)
-        self.assertEqual(payload["repo_doc_match_count"], 1)
+        self.assertNotIn("repo_doc_match_count", payload)
         self.assertEqual(payload["foreground_action"]["id"], "open_registry_search_source_window")
         self.assertIn("compatibility-shim-inventory.md", payload["foreground_action"]["command"])
 
@@ -1633,12 +1630,9 @@ class SearchCleanSourceTests(unittest.TestCase):
 
         self.assertEqual(code, 1)
         self.assertFalse(payload["ok"])
-        self.assertEqual(payload["skipped_entry_count"], 1)
-        self.assertEqual(
-            payload["skipped_reason_counts"],
-            {"not_searchable_workspace_entry": 1},
-        )
-        self.assertEqual(payload["unavailable_source_count"], 0)
+        self.assertNotIn("skipped_entry_count", payload)
+        self.assertNotIn("skipped_reason_counts", payload)
+        self.assertNotIn("unavailable_source_count", payload)
         self.assertEqual(payload.get("warnings", []), [])
         self.assertNotIn("skipped_entries", payload)
         self.assertNotIn("unable to open database file", encoded)
@@ -1656,6 +1650,8 @@ class SearchCleanSourceTests(unittest.TestCase):
                     "deep",
                     "--cwd",
                     str(self.cwd),
+                    "--detail",
+                    "full",
                     "--json",
                 ]
             )
@@ -1697,6 +1693,8 @@ class SearchCleanSourceTests(unittest.TestCase):
                     str(self.cwd),
                     "--cwd",
                     str(self.cwd),
+                    "--detail",
+                    "full",
                     "--json",
                 ]
             )
@@ -1784,14 +1782,9 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(payload["status"], "no_phrase_like_matches")
         self.assertEqual(payload["match_count"], 0)
-        self.assertEqual(payload["suppressed_low_coverage_match_count"], 2)
+        self.assertNotIn("suppressed_low_coverage_match_count", payload)
         self.assertNotIn("suppressed_low_coverage_matches", payload)
-        boundary = payload["source_boundary"]
-        self.assertEqual(boundary["authority"], "direction_only")
-        self.assertEqual(
-            (boundary["source_backed_claim_allowed"], boundary["search_miss_is_not_absence_of_memory"], boundary["phrase_like_low_coverage_suppressed"]),
-            (False, True, True),
-        )
+        self.assertNotIn("source_boundary", payload)
         self.assertNotIn("privacy", payload)
         self.assertEqual(payload["suppression_boundary"], "phrase_like_low_coverage_suppressed")
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")

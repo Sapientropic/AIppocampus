@@ -42,13 +42,33 @@ class RecallFeedbackEventTests(unittest.TestCase):
 
         exact_text = report["by_blend_context"]["exact_quote"]["signal_families"]["text"]
         theme_graph = report["by_blend_context"]["theme_emergence"]["signal_families"]["graph"]
-        self.assertEqual(exact_text["candidate_delivered_count"], 1)
+        self.assertEqual(exact_text["no_visible_effect_count"], 1)
         self.assertEqual(exact_text["source_reopen_success_count"], 1)
         self.assertEqual(theme_graph["ignored_count"], 1)
         self.assertEqual(report["policy_boundary"]["telemetry_is_calibration_evidence"], True)
         self.assertEqual(report["privacy_boundary"]["stores_raw_prompt_text"], False)
         self.assertEqual(report["privacy_boundary"]["stores_private_source_excerpt"], False)
         self.assertNotIn("raw_prompt", events[0])
+
+    def test_public_recall_feedback_event_preserves_negative_shared_outcomes(self) -> None:
+        events = [
+            feedback.recall_feedback_event(
+                candidate_id="route:r1",
+                source_id="source:s1",
+                outcome="wrong_route_drag",
+            )
+            for _ in range(2)
+        ]
+
+        report = feedback.recall_feedback_report(events)
+        calibration = feedback.recall_feedback_calibration_report(events)
+
+        self.assertEqual([event["outcome"] for event in events], ["wrong_route_drag"] * 2)
+        self.assertEqual(report["outcome_counts"]["wrong_route_drag"], 2)
+        self.assertNotIn("candidate_delivered", report["outcome_counts"])
+        self.assertEqual(calibration["deltas"][0]["signal_counts"], {"wrong_route_drag": 2})
+        self.assertEqual(calibration["deltas"][0]["route_weight_delta"], -1.0)
+        self.assertFalse(calibration["deltas"][0]["foreground_eligible"])
 
     def test_active_flow_reducer_promotes_reopen_success_and_demotes_blocked_routes(self) -> None:
         events = [
@@ -299,6 +319,55 @@ class RecallFeedbackEventTests(unittest.TestCase):
                 source_id="source:test",
             )
         self.assertEqual(context.exception.field, "route_kind")
+
+    def test_user_correction_alias_scores_without_delta_drift(self) -> None:
+        events = [
+            feedback.active_flow_event(
+                route_id=f"route:{raw}",
+                route_kind="active_path",
+                signal=raw,
+                source_id=f"source:{raw}",
+            )
+            for raw in ("user_correction", "corrected")
+        ]
+
+        activation = feedback.active_flow_activation_report(events)
+        lifecycle = feedback.suppression_lifecycle_report(events, detail="operator")
+        calibration = feedback.recall_feedback_calibration_report(events)
+        routes = {row["route_id"]: row for row in activation["routes"]}
+
+        self.assertEqual([event["signal"] for event in events], ["user_correction", "user_correction"])
+        self.assertEqual([event["weight_delta"] for event in events], [-1.0, -1.0])
+        self.assertEqual(routes["route:user_correction"]["current_feedback_state"], "suppressed_hard_negative")
+        self.assertFalse(routes["route:corrected"]["foreground_eligible"])
+        self.assertEqual(lifecycle["hard_negative_count"], 2)
+        self.assertEqual(calibration["outcome_counts"]["user_correction"], 2)
+
+    def test_unknown_persisted_active_flow_signal_fails_closed(self) -> None:
+        persisted = {
+            "kind": "aippocampus_active_flow_event",
+            "route_id": "route:unknown",
+            "route_kind": "active_path",
+            "signal": "manual_search_after_routes",
+            "weight_delta": 0.1,
+        }
+
+        activation = feedback.active_flow_activation_report([persisted])
+        lifecycle = feedback.suppression_lifecycle_report([persisted], detail="operator")
+        calibration = feedback.recall_feedback_calibration_report([persisted])
+        training_signals = feedback.feedback_training_signal_rows([persisted])
+
+        self.assertEqual(activation["routes"], [])
+        self.assertEqual(activation["metrics"]["invalid_signal_count"], 1)
+        self.assertEqual(activation["invalid_signal_samples"][0]["route_id"], "route:unknown")
+        self.assertEqual(lifecycle["route_count"], 0)
+        self.assertEqual(lifecycle["invalid_signal_count"], 1)
+        self.assertEqual(calibration["outcome_counts"], {})
+        self.assertEqual(calibration["invalid_signal_count"], 1)
+        self.assertEqual(training_signals, [])
+        encoded = json.dumps({"activation": activation, "lifecycle": lifecycle}, ensure_ascii=False)
+        self.assertNotIn('"candidate_delivered": 1', encoded)
+        self.assertNotIn('"foreground_eligible": true', encoded)
 
     def test_exact_stale_signal_and_custom_weight_calibration_are_preserved(self) -> None:
         stale = feedback.active_flow_event(

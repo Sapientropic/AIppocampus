@@ -66,6 +66,8 @@ def _semantic_packet(packet: Mapping[str, Any]) -> bool:
 
 def _semantic_route_index(memory_packets: list[dict[str, Any]]) -> tuple[int, Mapping[str, Any]] | None:
     for index, packet in enumerate(memory_packets, start=1):
+        if route_projection.route_anchor_gate_blocks_reopen(packet):
+            continue
         if _semantic_packet(packet):
             return index, packet
     return None
@@ -130,6 +132,7 @@ def maybe_promote_semantic_recovery(
     foreground_action: dict[str, Any],
     followup_actions: list[dict[str, Any]],
     recall_selector: str,
+    anchor_gate: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Prefer source-shaped semantic routes over broad recovery fallbacks.
 
@@ -140,6 +143,11 @@ def maybe_promote_semantic_recovery(
     navigation.
     """
 
+    if (
+        _action_id(foreground_action) == "search_registry_sources_for_original_cue_anchors"
+        and route_projection.anchor_gate_blocks_reopen(anchor_gate)
+    ):
+        return foreground_action, followup_actions
     semantic = _semantic_route_index(memory_packets)
     if semantic is None:
         return foreground_action, followup_actions

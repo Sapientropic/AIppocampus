@@ -538,6 +538,7 @@ def _finalize_registry_search_matches(
     matches.sort(
         key=lambda item: (
             1 if item.get("search_noise") or match_is_demoted_artifact(item) else 0,
+            0 if match_has_direct_source_open_route(item) else 1,
             -query_anchor_rank(item)[0],
             -query_anchor_rank(item)[1],
             -query_anchor_rank(item)[2],
@@ -576,6 +577,8 @@ def search_registry_sources(
     per_thread_limit: int = 3,
     include_paths: bool = False,
     search_budget: str = "default",
+    detail: str = "compact",
+    public_output: bool = False,
     record_last_search: bool = False,
     cwd: str | Path | None = None,
     max_elapsed_ms: int | None = 5000,
@@ -617,5 +620,7 @@ def search_registry_sources(
         duplicate_metrics=duplicate_metrics,
         include_paths=include_paths,
         search_budget=search_budget,
+        detail=detail,
+        public_output=public_output,
         annotate_reopen_commands=_annotate_last_search_reopen_commands,
     )

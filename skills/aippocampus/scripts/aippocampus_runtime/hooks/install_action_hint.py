@@ -22,13 +22,11 @@ from aippocampus_runtime.hooks.action_hint_cache import (
     load_action_hint_records_with_diagnostics,
 )
 from aippocampus_runtime.hooks.action_hint_cache_records import BLOCKED_STATES
-from aippocampus_runtime.hooks.foreground_status import (
-    action_hint_status_contract,
-    compact_action_hint_status_result,
-)
 from aippocampus_runtime.hooks.host_boundary import add_host_integration
 from aippocampus_runtime.hooks.install_action_hint_projection import (
     action_hint_frontstage_card,
+    action_hint_status_contract,
+    compact_action_hint_status_result,
     public_install_result,
     redact_public_result,
 )

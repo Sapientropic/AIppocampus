@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 
+from aippocampus_runtime.contracts import foreground_action_contract_violations
 from aippocampus_runtime.hooks import install_prompt as installer
 from aippocampus_runtime.hooks.debug_log import (
     write_debug_log,
@@ -342,7 +343,16 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             result["last_prompt_hook_memory_surface"],
             "candidate",
         )
-        self.assertEqual(result["foreground_action"]["id"], "review_last_prompt_hook_recall")
+        self.assertEqual(result["foreground_action"]["id"], "try_first_recall_after_prompt_hook")
+        self.assertIn("command_template", result["foreground_action"])
+        self.assertEqual(result["foreground_action"]["tool_name"], "agent_recall")
+        self.assertEqual(
+            result["foreground_action"]["tool_args_template"],
+            {"cue": "{continuity_cue}", "detail": "compact"},
+        )
+        self.assertEqual(result["foreground_action"]["requires"], ["continuity_cue"])
+        self.assertEqual(foreground_action_contract_violations(result), [])
+        self.assertEqual(result["last_prompt_hook_review"]["id"], "review_last_prompt_hook_recall")
         self.assertIn("foreground_action", result)
         self.assertGreater(result["last_prompt_hook_useful_signal_count"], 0)
         public_status = json.dumps(result, ensure_ascii=False)
@@ -606,7 +616,16 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertNotIn("last_prompt_hook", payload)
         self.assertNotIn("prompt_hook_latency_risk", payload)
-        self.assertEqual(payload["foreground_action"]["id"], "review_last_prompt_hook_recall")
+        self.assertEqual(payload["foreground_action"]["id"], "try_first_recall_after_prompt_hook")
+        self.assertIn("command_template", payload["foreground_action"])
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertEqual(
+            payload["foreground_action"]["tool_args_template"],
+            {"cue": "{continuity_cue}", "detail": "compact"},
+        )
+        self.assertEqual(payload["foreground_action"]["requires"], ["continuity_cue"])
+        self.assertEqual(foreground_action_contract_violations(payload), [])
+        self.assertEqual(payload["last_prompt_hook_review"]["id"], "review_last_prompt_hook_recall")
         self.assertIn("foreground_action", payload)
         self.assertEqual(payload["last_prompt_hook_memory_surface"], "candidate")
         self.assertGreater(payload["last_prompt_hook_useful_signal_count"], 0)

@@ -15,6 +15,7 @@ from typing import Any
 from aippocampus_runtime.core import stable_json_join_id
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.feedback.vocabulary import (
+    ACTIVE_FLOW_SIGNALS,
     DEFAULT_SIGNAL_DELTAS,
     HARD_NEGATIVE_FEEDBACK_SIGNALS,
     NON_FOREGROUND_SIGNALS,
@@ -39,7 +40,16 @@ def _safe_token(value: Any, *, fallback_prefix: str) -> str:
 
 
 def _safe_signal(value: Any) -> str:
-    return normalize_feedback_signal(value)
+    signal = normalize_feedback_signal(value, default="")
+    return signal if signal in ACTIVE_FLOW_SIGNALS else ""
+
+
+def _invalid_signal_sample(event: Mapping[str, Any], route_id: str) -> dict[str, str]:
+    return {
+        "route_id": route_id,
+        "signal": _safe_token(event.get("signal") or event.get("outcome"), fallback_prefix="signal"),
+        "reason": "unknown_feedback_signal_quarantined",
+    }
 
 
 def _safe_float(value: Any, default: float) -> float:
@@ -124,6 +134,8 @@ def suppression_lifecycle_report(
     detail: str = "compact",
 ) -> dict[str, Any]:
     grouped: dict[str, dict[str, Any]] = {}
+    invalid_signal_counts: Counter[str] = Counter()
+    invalid_signal_samples: list[dict[str, str]] = []
     for index, event in enumerate(events):
         if not isinstance(event, Mapping) or event.get("kind") not in {
             "aippocampus_active_flow_event",
@@ -136,6 +148,12 @@ def suppression_lifecycle_report(
         else:
             route_id = _safe_token(event.get("candidate_id"), fallback_prefix="candidate")
             signal = _safe_signal(event.get("outcome"))
+        if not signal:
+            sample = _invalid_signal_sample(event, route_id)
+            invalid_signal_counts[sample["signal"]] += 1
+            if len(invalid_signal_samples) < 8:
+                invalid_signal_samples.append(sample)
+            continue
         row = grouped.setdefault(
             route_id,
             {
@@ -186,6 +204,8 @@ def suppression_lifecycle_report(
             "hard_negative_count": status_counts.get("suppressed_hard_negative", 0),
             "overridden_by_positive_count": status_counts.get("overridden_by_positive_source_open", 0),
             "foreground_ineligible_count": foreground_ineligible_count,
+            "invalid_signal_count": sum(invalid_signal_counts.values()),
+            "invalid_signal_samples": invalid_signal_samples,
             "policy_boundary": {
                 "suppression_is_route_local": True,
                 "suppression_is_reversible": True,
@@ -204,5 +224,6 @@ def suppression_lifecycle_report(
         "hard_negative_count": status_counts.get("suppressed_hard_negative", 0),
         "overridden_by_positive_count": status_counts.get("overridden_by_positive_source_open", 0),
         "foreground_ineligible_count": foreground_ineligible_count,
+        "invalid_signal_count": sum(invalid_signal_counts.values()),
         "claim_boundary": "feedback_suppression_is_navigation_calibration_not_source_truth",
     }

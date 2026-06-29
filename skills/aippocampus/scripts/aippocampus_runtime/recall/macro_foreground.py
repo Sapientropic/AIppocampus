@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+# aippocampus-instruction-surface: macro compact recovery projection owner; ledgers and source proof stay in detail/operator paths.
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
+from aippocampus_runtime.foreground_compact_language import strip_compact_policy_vocabulary
 
 
 def compact_missing_state_card(
@@ -20,7 +22,7 @@ def compact_missing_state_card(
 ) -> dict[str, Any]:
     """Keep missing-state recovery foreground-first; ledgers stay in detail."""
 
-    return {
+    card = {
         "kind": kind,
         "schema_version": schema_version,
         "macro_packet_schema_version": macro_packet_schema_version,
@@ -49,6 +51,7 @@ def compact_missing_state_card(
         "operator_detail_command": "aippocampus agent macro --json --detail full",
         "output_boundary": "compact_foreground_no_audit_ledgers",
     }
+    return strip_compact_policy_vocabulary(card)
 
 
 def momentum_block(entry: Mapping[str, Any]) -> Mapping[str, Any]:

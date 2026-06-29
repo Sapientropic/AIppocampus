@@ -429,7 +429,7 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
             "writes_local_plugin_cache",
         )
 
-    def test_mcp_status_present_tools_gives_current_thread_chooser_and_loop_guide(self) -> None:
+    def test_mcp_status_present_tools_gives_current_thread_chooser_and_keeps_guide_in_detail(self) -> None:
         payload = tool_readiness.tool_readiness_summary()
 
         self.assertTrue(payload["ok"])
@@ -452,21 +452,21 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         self.assertNotIn("cli_fallback_actions", payload)
         self.assertNotIn("record_route_feedback_cli_fallback", encoded)
         self.assertNotIn("durable_low_authority_feedback_write", encoded)
-        guide = payload["tool_use_guide"]
+        self.assertNotIn("tool_use_guide", payload)
+        self.assertTrue(payload["details_available"])
+        self.assertLess(len(encoded), 2400)
+        full_payload = tool_readiness.tool_readiness_summary(detail="full")
+        guide = full_payload["tool_use_guide"]
         self.assertEqual(guide["primary_consumer_field"], "foreground_action")
         self.assertIn("agent_recall", guide["when_to_use"])
         self.assertIn("agent_deepen", guide["when_to_use"])
         self.assertNotIn("recall_context", guide["workflow"])
         self.assertNotIn("recall_deepen", guide["workflow"])
-        encoded_guide = json.dumps(guide, ensure_ascii=False)
-        self.assertNotIn("recall_context", encoded_guide)
-        self.assertNotIn("recall_deepen", encoded_guide)
         self.assertNotIn("agent_feedback", guide["when_to_use"])
         self.assertNotIn("route_feedback_cli", guide["fallbacks"])
         self.assertIn("current_thread_visibility_missing", guide["fallbacks"])
         self.assertEqual(executable_command_violations(payload), [])
 
-        full_payload = tool_readiness.tool_readiness_summary(detail="full")
         write_actions = full_payload["operator_write_actions"]
         self.assertEqual(write_actions[0]["id"], "record_route_feedback_cli_fallback")
         self.assertEqual(
@@ -476,7 +476,7 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         self.assertIn("recall_context", full_payload["tool_use_guide"]["legacy_workflow"])
 
     def test_mcp_status_uses_catalog_metadata_for_foreground_parameters_and_workflow(self) -> None:
-        payload = tool_readiness.tool_readiness_summary()
+        payload = tool_readiness.tool_readiness_summary(detail="full")
         guide = payload["tool_use_guide"]
 
         self.assertEqual(

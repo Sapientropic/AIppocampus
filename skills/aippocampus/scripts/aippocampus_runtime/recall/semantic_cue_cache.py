@@ -23,6 +23,9 @@ from aippocampus_runtime.recall.feedback.vocabulary import (
     normalize_feedback_signal,
 )
 from aippocampus_runtime.recall.semantic.confidence_policy import meets_active_cue_confidence
+from aippocampus_runtime.recall.semantic.feedback_confidence import (
+    feedback_aware_recall_cue_confidence,
+)
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 from aippocampus_runtime.source.agent_trace_admission import learning_priority_for_signal
 from aippocampus_runtime.source.io_kernel import (
@@ -207,6 +210,8 @@ def cue_feedback_allows_foreground(row: dict[str, Any]) -> bool:
 def refresh_status(row: dict[str, Any]) -> dict[str, Any]:
     hit_count = int(row.get("hit_count") or 0)
     explicit_useful_count = int(row.get("explicit_useful_feedback_count") or 0)
+    if int(row.get("source_open_success_count") or 0) > 0:
+        row["confidence"] = feedback_aware_recall_cue_confidence(row)
     confidence = float(row.get("confidence") or 0.0)
     has_refs = bool(row.get("source_refs"))
     raw_last_signal = str(row.get("last_feedback_signal") or "").casefold()

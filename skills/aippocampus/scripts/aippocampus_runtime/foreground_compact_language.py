@@ -14,6 +14,9 @@ from typing import Any
 COMPACT_POLICY_FIELD_DENYLIST = frozenset(
     {
         "claim_boundary",
+        "action_boundary",
+        "last_recall_boundary",
+        "last_recall_fallback_boundary",
         "operator_boundary",
         "operator_detail_command",
         "operator_detail_command_template",
@@ -24,7 +27,9 @@ COMPACT_POLICY_FIELD_DENYLIST = frozenset(
         "operator_json_requires",
         "output_boundary",
         "policy_boundary",
+        "source_boundary",
         "source_reopen_boundary",
+        "write_boundary",
     }
 )
 

@@ -34,6 +34,7 @@ from aippocampus_runtime.recall.retrieval import (
     search_rag_chunks,
     split_query_terms,
 )
+from aippocampus_runtime.source import agent_trace_families
 from aippocampus_runtime.source.rollout import iter_messages
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
@@ -197,7 +198,7 @@ def rollout_payload_class(message: dict) -> str:
     if role == "user":
         return "user_message"
     if role == "assistant" and message.get("is_final"):
-        return "assistant_final"
+        return agent_trace_families.ASSISTANT_FINAL_PRODUCER_FAMILY
     if role == "assistant" and phase:
         return f"assistant_{phase}"
     return kind or role or "message"

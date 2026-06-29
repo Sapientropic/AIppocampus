@@ -362,6 +362,33 @@ def run_shell_command(command: str) -> CommandResult:
     )
 
 
+def infer_current_pr_number(*, github_repo: str | None = None) -> tuple[str | None, str | None]:
+    command = ["gh", "pr", "view", "--json", "number"]
+    if github_repo:
+        command.extend(["--repo", github_repo])
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, f"gh_pr_view_failed:{exc}"
+    if completed.returncode != 0:
+        return None, (completed.stderr or completed.stdout or "no_current_pr").strip()
+    try:
+        payload = json.loads(completed.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        return None, f"gh_pr_view_json_error:{exc}"
+    if not isinstance(payload, Mapping):
+        return None, "gh_pr_view_number_not_object"
+    number = str(payload.get("number") or "").strip()
+    return (number, None) if number else (None, "gh_pr_view_number_empty")
+
+
 def _metadata_from_plan_item(item: Mapping[str, Any]) -> dict[str, Any]:
     return {key: item[key] for key in COMMAND_METADATA_KEYS if key in item}
 
@@ -485,6 +512,8 @@ def _compact_preflight_report(report: Mapping[str, Any]) -> dict[str, Any]:
         "skipped_command_count": report.get("skipped_command_count"),
         "skipped_by_mode_count": report.get("skipped_by_mode_count"),
         "first_failure": report.get("first_failure"),
+        "blocker_count": report.get("blocker_count"),
+        "blockers": report.get("blockers"),
         "manual_required_claim_count": report.get("manual_required_claim_count"),
         "first_manual_required_claim": report.get("first_manual_required_claim"),
         "duplicate_run_budget": _compact_duplicate_run_budget(
@@ -507,6 +536,8 @@ def run_preflight(
     local_executable: bool = False,
     detail: str = "compact",
     mode: str = DEFAULT_MODE,
+    pr_number: str | None = None,
+    github_repo: str | None = None,
 ) -> dict[str, Any]:
     selected_mode = "pre-push" if mode == "prepush" else mode
     if selected_mode not in {DEFAULT_MODE, *FULL_MODES}:
@@ -523,6 +554,24 @@ def run_preflight(
         diff_check_base=base if not caller_supplied_changed_files else None,
     )
     planned = ordered_plan_commands(plan)
+    pr_closeout_blocker: dict[str, Any] | None = None
+    effective_pr = str(pr_number or "").strip().lstrip("#")
+    pr_inference_error: str | None = None
+    if selected_mode == "closeout" and not effective_pr:
+        effective_pr, pr_inference_error = infer_current_pr_number(github_repo=github_repo)
+    if selected_mode == "closeout" and effective_pr:
+        planned.append(
+            _pr_closeout_audit_plan_item(
+                effective_pr,
+                github_repo=github_repo,
+                local_executable=local_executable,
+            )
+        )
+    elif selected_mode == "closeout":
+        pr_closeout_blocker = _missing_pr_closeout_blocker(
+            github_repo=github_repo,
+            reason=pr_inference_error or "no_pr_number_supplied",
+        )
     runnable = [item for item in planned if _command_runs_in_mode(item, mode=selected_mode)]
     skipped_by_mode = [item for item in planned if item not in runnable]
     results: list[CommandResult] = []
@@ -552,10 +601,12 @@ def run_preflight(
         if isinstance(item, Mapping)
     ]
     runnable_gates_passed = first_failure is None
-    ok = runnable_gates_passed and not manual_required
+    ok = runnable_gates_passed and not manual_required and pr_closeout_blocker is None
     status = (
         "fail"
         if first_failure is not None
+        else "blocked"
+        if pr_closeout_blocker is not None
         else "manual_required_pending"
         if manual_required
         else "pass"
@@ -582,6 +633,8 @@ def run_preflight(
         "skipped_by_mode_count": len(skipped_by_mode),
         "skipped_after_failure_count": len(skipped_after_failure),
         "first_failure": row(first_failure) if first_failure else None,
+        "blocker_count": 1 if pr_closeout_blocker else 0,
+        "blockers": [pr_closeout_blocker] if pr_closeout_blocker else [],
         "manual_required_claim_count": len(manual_required),
         "first_manual_required_claim": (
             _compact_manual_claim(manual_required[0]) if manual_required else None
@@ -623,12 +676,16 @@ def run_preflight(
             base=base,
             local_executable=local_executable,
             mode=selected_mode,
+            pr_number=effective_pr or pr_number,
+            github_repo=github_repo,
         ),
         "closeout_command": _detail_command(
             normalized_changed,
             base=base,
             local_executable=local_executable,
             mode="closeout",
+            pr_number=effective_pr or pr_number,
+            github_repo=github_repo,
         ),
         "planner_detail_command": _planner_detail_command(
             normalized_changed,
@@ -651,16 +708,91 @@ def _changed_file_args_text(changed_files: Sequence[str]) -> str:
     return " ".join(f"--changed-file {shell_arg(path)}" for path in changed_files)
 
 
+def _pr_closeout_audit_command(
+    pr_number: str,
+    *,
+    github_repo: str | None,
+    local_executable: bool,
+    detail_full: bool = False,
+) -> str:
+    parts = ["--pr", shell_arg(str(pr_number).lstrip("#")), "--json"]
+    if github_repo:
+        parts.extend(["--github-repo", shell_arg(github_repo)])
+    if detail_full:
+        parts.extend(["--detail", "full"])
+    return py_script(
+        "tools/aippocampus/github/closeout_audit.py",
+        " ".join(parts),
+        local_executable=local_executable,
+    )
+
+
+def _pr_closeout_audit_plan_item(
+    pr_number: str,
+    *,
+    github_repo: str | None,
+    local_executable: bool,
+) -> dict[str, Any]:
+    return {
+        "command": _pr_closeout_audit_command(
+            pr_number,
+            github_repo=github_repo,
+            local_executable=local_executable,
+        ),
+        "reason": (
+            "Local closeout must audit the actual PR body with the same closeout "
+            "contract CI enforces, so agents do not discover PR evidence blockers "
+            "only after push."
+        ),
+        "scope": "pre-push",
+        "gate_class": "hard",
+        "verification_owner": "local_closeout",
+        "guard_id": "pr-closeout-audit",
+        "owner_doc": "docs/architecture/ops/guard-lifecycle-registry.md",
+        "cost_budget": "small",
+        "cost_budget_ms": 60_000,
+        "ci_mirrored": True,
+        "default_local": False,
+        "acceptance_bearing": True,
+    }
+
+
+def _missing_pr_closeout_blocker(
+    *,
+    github_repo: str | None,
+    reason: str,
+) -> dict[str, Any]:
+    repo_arg = f" --github-repo {shell_arg(github_repo)}" if github_repo else " --github-repo <owner/repo>"
+    next_command = (
+        "python tools/aippocampus/github/closeout_audit.py --pr <number> --json"
+        f"{repo_arg}"
+    )
+    return {
+        "kind": "pr_closeout_audit_not_run",
+        "severity": "blocker",
+        "message": "PR closeout audit has not been run on the actual PR body.",
+        "reason": reason,
+        "next": next_command,
+        "detail": f"{next_command} --detail full",
+    }
+
+
 def _detail_command(
     changed_files: Sequence[str],
     *,
     base: str,
     local_executable: bool,
     mode: str,
+    pr_number: str | None = None,
+    github_repo: str | None = None,
 ) -> str:
     parts = ["--json", "--detail full"]
     if mode != DEFAULT_MODE:
         parts.extend(["--mode", mode])
+    if pr_number:
+        parts.extend(["--pr", shell_arg(str(pr_number).lstrip("#"))])
+    if github_repo:
+        parts.extend(["--github-repo", shell_arg(github_repo)])
     if local_executable:
         parts.append("--local-executable")
     if changed_files:
@@ -732,6 +864,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Alias for --mode pre-push.",
     )
+    parser.add_argument(
+        "--pr",
+        help="PR number to audit with closeout_audit.py when running --mode closeout.",
+    )
+    parser.add_argument(
+        "--github-repo",
+        help="owner/repo for PR-body closeout audit; closeout_audit.py can infer this when omitted.",
+    )
     return parser
 
 
@@ -757,6 +897,12 @@ def _print_text(report: Mapping[str, Any]) -> None:
         if failure.get("stdout_tail"):
             print("  stdout:")
             print(str(failure.get("stdout_tail")))
+    elif report.get("blockers"):
+        blocker = list(report.get("blockers") or [])[0]
+        print("First blocker:")
+        print(f"  kind: {blocker.get('kind')}")
+        print(f"  message: {blocker.get('message')}")
+        print(f"  next: {blocker.get('next')}")
     else:
         print("No blockers.")
     if report.get("skipped_by_mode_count"):
@@ -782,6 +928,8 @@ def main(argv: list[str] | None = None) -> int:
         local_executable=bool(args.local_executable),
         detail=str(args.detail),
         mode=mode,
+        pr_number=args.pr,
+        github_repo=args.github_repo,
     )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))

@@ -552,6 +552,35 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
             any("test_changed_surface_preflight" in command for command in seen)
         )
 
+    def test_default_preflight_runs_closeout_audit_contract_tests_for_tooling_change(self) -> None:
+        seen: list[str] = []
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            seen.append(command)
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=["tools/aippocampus/github/closeout_audit.py"],
+                base="origin/main",
+            )
+
+        self.assertTrue(report["ok"], report)
+        self.assertTrue(
+            any("tests.aippocampus.test_closeout_audit" in command for command in seen)
+        )
+
     def test_closeout_mode_runs_explicit_pr_tier(self) -> None:
         seen: list[str] = []
 
@@ -577,11 +606,13 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
                 ],
                 base="origin/main",
                 mode="closeout",
+                pr_number="2911",
             )
 
         self.assertEqual(report["mode"], "closeout")
         self.assertEqual(report["skipped_by_mode_count"], 0)
         self.assertTrue(any("run_tests.py --tier pr" in command for command in seen))
+        self.assertTrue(any("closeout_audit.py --pr 2911 --json" in command for command in seen))
 
     def test_closeout_mode_runs_slow_focused_proof_slices(self) -> None:
         seen: list[str] = []
@@ -615,6 +646,7 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
                 ],
                 base="origin/main",
                 mode="closeout",
+                pr_number="2911",
             )
 
         joined = "\n".join(seen)
@@ -623,6 +655,70 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
         self.assertIn("test_aippocampus_mcp_server_recall", joined)
         self.assertIn("test_agent_recall_apw_fallback", joined)
         self.assertIn("recall_integration_readiness.py", joined)
+        self.assertIn("closeout_audit.py --pr 2911 --json", joined)
+
+    def test_closeout_mode_infers_current_pr_and_runs_body_audit(self) -> None:
+        seen: list[str] = []
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            seen.append(command)
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "infer_current_pr_number", return_value=("2920", None)),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=["tools/aippocampus/changed_surface_preflight.py"],
+                base="origin/main",
+                mode="closeout",
+            )
+
+        self.assertTrue(report["ok"], report)
+        self.assertTrue(any("closeout_audit.py --pr 2920 --json" in command for command in seen))
+        self.assertIn("--pr 2920", report["detail_command"])
+        self.assertIn("--pr 2920", report["closeout_command"])
+
+    def test_closeout_mode_blocks_when_pr_body_audit_has_no_pr_context(self) -> None:
+        seen: list[str] = []
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            seen.append(command)
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "infer_current_pr_number", return_value=(None, "no_current_pr")),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=["tools/aippocampus/changed_surface_preflight.py"],
+                base="origin/main",
+                mode="closeout",
+            )
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["status"], "blocked")
+        self.assertEqual(report["blockers"][0]["kind"], "pr_closeout_audit_not_run")
+        self.assertIn("closeout_audit.py --pr <number> --json", report["blockers"][0]["next"])
+        self.assertFalse(any("closeout_audit.py --pr" in command for command in seen))
 
     def test_duplicate_focused_modules_are_reported(self) -> None:
         def fake_command(command: str) -> preflight.CommandResult:

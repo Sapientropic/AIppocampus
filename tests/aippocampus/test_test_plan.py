@@ -197,6 +197,36 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             )
         )
 
+    def test_closeout_audit_tooling_change_recommends_contract_tests(self) -> None:
+        payload = test_plan.build_test_plan(
+            ["tools/aippocampus/github/closeout_audit.py"]
+        )
+        commands = [str(command["command"]) for command in payload["commands"]]
+
+        self.assertIn("closeout_audit_tooling", payload["categories"])
+        self.assertTrue(
+            any("tests.aippocampus.test_closeout_audit" in command for command in commands)
+        )
+
+    def test_trace_feedback_contract_changes_recommend_producer_consumer_tests(self) -> None:
+        payload = test_plan.build_test_plan(
+            [
+                "skills/aippocampus/scripts/aippocampus_runtime/source/agent_trace_admission.py",
+                "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback/vocabulary.py",
+            ]
+        )
+        commands = [str(command["command"]) for command in payload["commands"]]
+
+        self.assertIn("producer_consumer_contracts", payload["categories"])
+        self.assertTrue(
+            any(
+                "tests.aippocampus.test_feedback_vocabulary" in command
+                and "tests.aippocampus.test_recall_feedback_events" in command
+                and "tests.aippocampus.test_agent_trace_admission" in command
+                for command in commands
+            )
+        )
+
     def test_agent_slop_guard_fixtures_do_not_feed_changed_surface_advisory(self) -> None:
         payload = test_plan.build_test_plan(
             [

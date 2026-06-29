@@ -19,6 +19,7 @@ from aippocampus_runtime.contracts import (
     foreground_template_action,
     shell_quote,
 )
+from aippocampus_runtime.foreground_compact_language import strip_compact_policy_vocabulary
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.agent_recall_projection import compact_agent_recall_payload
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
@@ -169,6 +170,7 @@ def agent_recall_missing_query_payload(
     *,
     schema_version: str,
     kind: str,
+    detail: str = "compact",
 ) -> dict[str, Any]:
     payload = foreground_recovery_card(
         kind=kind,
@@ -219,7 +221,9 @@ def agent_recall_missing_query_payload(
             },
         }
     )
-    return payload
+    if detail == "full":
+        return payload
+    return strip_compact_policy_vocabulary(payload)
 
 
 def _foreground_template_action(
@@ -399,6 +403,7 @@ def missing_handle_payload(
     mode: str,
     schema_version: str,
     kind: str,
+    detail: str = "compact",
 ) -> dict[str, Any]:
     body = {
         "error": {
@@ -409,7 +414,7 @@ def missing_handle_payload(
     # Missing selector is a foreground input-recovery case. Malformed or stale
     # handles stay `cannot_verify` in the caller paths because those are source
     # authority failures, not chooser prompts.
-    return _public_payload(
+    payload = _public_payload(
         {
             "kind": kind,
             "schema_version": schema_version,
@@ -425,6 +430,9 @@ def missing_handle_payload(
             "operator_detail_command": f"aippocampus agent {mode} --json --detail full",
         }
     )
+    if detail == "full":
+        return payload
+    return strip_compact_policy_vocabulary(payload)
 
 
 def last_recall_unavailable_payload(
