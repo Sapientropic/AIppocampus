@@ -7,6 +7,7 @@ from typing import Any
 
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import sanitize_external_model_payload
+from aippocampus_runtime.foreground_compact_language import compact_frontstage_projection
 from aippocampus_runtime.warm_ambient.scheduler import JOB_SCHEMA_VERSION, WARM_STATUS_COMMAND
 
 WARM_STATUS_DETAIL_COMMAND = "aippocampus warm status --detail full --json"
@@ -148,4 +149,4 @@ def compact_warm_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
             "operator_json_command": WARM_STATUS_OPERATOR_COMMAND,
         },
     }
-    return sanitize_external_model_payload(card)
+    return sanitize_external_model_payload(compact_frontstage_projection(card))

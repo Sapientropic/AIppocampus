@@ -10,6 +10,7 @@ from pathlib import Path
 from aippocampus_runtime import core
 from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.source import latest_reply as latest_reply_module
+from tests.aippocampus.frontstage_assertions import assert_no_compact_policy_fields
 
 
 class McpLatestReplyTests(unittest.TestCase):
@@ -102,10 +103,7 @@ class McpLatestReplyTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["id"], "open_full_latest_reply")
         self.assertEqual(payload["source_reopen_action"]["tool_name"], "get_turn_context")
         self.assertEqual(payload["source_reopen_action"]["arguments"]["message_id"], "msg_final")
-        self.assertEqual(
-            payload["source_reopen_action"]["claim_boundary"],
-            "source_open_required_before_quoting",
-        )
+        self.assertNotIn("claim_boundary", payload["source_reopen_action"])
         self.assertLessEqual(
             payload["message"]["text_char_limit"],
             latest_reply_module.MAX_COMPACT_FINAL_ANSWER_CHARS,
@@ -114,6 +112,7 @@ class McpLatestReplyTests(unittest.TestCase):
         full_payload = self.call_latest_reply(cwd=str(self.cwd), detail="full")
         self.assertEqual(full_payload["detail"], "full")
         self.assertIn("text", full_payload["message"])
+        assert_no_compact_policy_fields(self, payload, surface="mcp.latest_reply")
 
     def test_latest_reply_mcp_marks_commentary_only_rollout_as_not_closeout(self) -> None:
         rollout = self.cwd / "commentary-only.jsonl"

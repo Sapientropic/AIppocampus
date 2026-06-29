@@ -33,6 +33,7 @@ from aippocampus_runtime.recall.feedback.vocabulary import (
     RECALL_OUTCOME_SIGNALS,
     normalize_feedback_signal,
     normalize_recall_outcome_signal,
+    recall_outcome_calibration_delta,
 )
 from aippocampus_runtime.source.agent_trace_admission import (
     behavior_training_signal_from_trace,
@@ -631,7 +632,16 @@ def recall_feedback_calibration_report(events: Iterable[Mapping[str, Any]]) -> d
                     route_id=route_id,
                 )
                 continue
-            event_delta = DEFAULT_SIGNAL_DELTAS.get(outcome, 0.0)
+            maybe_delta = recall_outcome_calibration_delta(outcome)
+            if maybe_delta is None:
+                _record_invalid_signal(
+                    event,
+                    invalid_signal_counts=invalid_signal_counts,
+                    invalid_signal_samples=invalid_signal_samples,
+                    route_id=route_id,
+                )
+                continue
+            event_delta = maybe_delta
         else:
             continue
         key = (route_id, route_kind)
@@ -695,6 +705,7 @@ def recall_feedback_calibration_report(events: Iterable[Mapping[str, Any]]) -> d
             "clean_source_mutation_allowed": False,
             "source_open_claim_allowed": False,
             "reversible_and_inspectable": True,
+            "unknown_recall_outcome_is_invalid_not_zero_delta": True,
         },
         "cannot_claim": [
             "feedback_event_is_source_truth",

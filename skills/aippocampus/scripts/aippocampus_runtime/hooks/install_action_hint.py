@@ -490,7 +490,7 @@ def main(argv: list[str] | None = None) -> int:
         result = compact_action_hint_status_result(result, event=ACTION_HINT_EVENT)
     elif not include_private_paths:
         result = redact_public_result(result, path=path)
-    if args.json_output:
+    if args.json_output or args.operator_json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(f"Action-time hints: {result.get('status') or 'unknown'}")

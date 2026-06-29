@@ -711,7 +711,7 @@ class AippocampusCliTests(unittest.TestCase):
             payload["events"]["SessionStart"]["commands"],
             ["<hook-command-redacted>"],
         )
-        self.assertFalse(payload["privacy_boundary"]["hook_command_serialized"])
+        self.assertNotIn("privacy_boundary", payload)
         self.assertNotIn(private_command, encoded)
         self.assertNotIn(str(root), encoded)
         self.assertEqual(operator.returncode, 0, operator.stderr)

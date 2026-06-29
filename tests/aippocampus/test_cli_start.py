@@ -58,9 +58,8 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertEqual(payload["performance_expectation"]["mode"], "steady_state")
         self.assertNotIn("state_summary", payload)
         self.assertEqual(payload["safe_next_actions"], [])
-        self.assertIn("deepen_after_recall", payload["detail_actions_available"])
-        self.assertIn("export_after_recall", payload["detail_actions_available"])
-        self.assertIn("sync_after_recall", payload["detail_actions_available"])
+        self.assertNotIn("detail_actions_available", payload)
+        self.assertTrue(payload["details_available"])
 
     def test_start_json_accepts_cue_and_returns_executable_recall(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -149,7 +148,8 @@ class AippocampusStartCliTests(unittest.TestCase):
         )
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("recall_supplied_cue", action_ids)
-        self.assertIn("search_all_for_supplied_cue", action_ids)
+        self.assertNotIn("search_all_for_supplied_cue", action_ids)
+        self.assertLessEqual(len(payload["safe_next_actions"]), 1)
 
     def test_start_json_redacts_operator_sensitive_fields(self) -> None:
         from aippocampus_runtime.cli import start as start_cli
@@ -237,7 +237,8 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertIn("register_claude_code_source", write_action_ids)
         self.assertIn("import_generic_jsonl_source", write_action_ids)
         self.assertIn("inspect_onboarding_status", action_ids)
-        self.assertIn("review_claude_code_hooks", action_ids)
+        self.assertNotIn("review_claude_code_hooks", action_ids)
+        self.assertLessEqual(len(payload["safe_next_actions"]), 1)
 
     def test_trusted_personal_profile_groups_setup_and_first_recall_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -395,6 +396,7 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("public_safe_demo_search", action_ids)
+        self.assertLessEqual(len(payload["safe_next_actions"]), 1)
         public_demo = next(
             action for action in payload["safe_next_actions"] if action["id"] == "public_safe_demo_search"
         )
@@ -402,12 +404,6 @@ class AippocampusStartCliTests(unittest.TestCase):
             "--clean-source-dir ./examples/public-memory-bundle/clean-source",
             public_demo["command_template"],
         )
-        exact_fallback = next(
-            action for action in payload["safe_next_actions"] if action["id"] == "exact_search_fallback"
-        )
-        self.assertNotIn("--clean-source-dir", exact_fallback["command_template"])
-        self.assertIn("configured local source", exact_fallback["why"])
-        self.assertIn("public_safe_demo_search", exact_fallback["why"])
         self.assertIn(
             "verify_codex_plugin_secondary",
             [action["id"] for action in payload["write_actions"]],
@@ -437,7 +433,8 @@ class AippocampusStartCliTests(unittest.TestCase):
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertEqual(action_ids, ["review_maintenance_plan_before_exact_latest"])
         self.assertNotIn("write_actions", payload)
-        self.assertEqual(payload["manage_command"], "aippocampus maintenance plan --summary-json")
+        self.assertNotIn("manage_command", payload)
+        self.assertTrue(payload["details_available"])
 
     def test_start_uses_health_freshness_gap_when_manifest_is_not_stale(self) -> None:
         from aippocampus_runtime.cli import start as start_cli

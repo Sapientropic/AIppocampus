@@ -380,6 +380,9 @@ class UpdateSyncTests(unittest.TestCase):
                 version="0.1.0",
                 mcp_command=str(Path(sys.executable).resolve()),
                 mcp_args=["-m", "aippocampus_runtime.cli.facade", "mcp"],
+                mcp_env={
+                    "PYTHONPATH": str((installed / "skills" / "aippocampus" / "scripts").resolve())
+                },
             )
 
             code, payload = run_update(
@@ -400,6 +403,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(launch["command_kind"], "python_module")
         self.assertTrue(launch["uses_absolute_command"])
         self.assertFalse(launch["uses_console_script"])
+        self.assertTrue(launch["package_runtime_env_present"])
 
     def test_status_uses_configured_codex_marketplace_root_without_flag(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
@@ -579,7 +583,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertTrue(payload["summary"]["agent_callable_host_ready"])
         self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
         self.assertNotIn("agent_callable", payload["summary"]["operator_blockers"])
-        self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
+        self.assertNotIn("agent_callable", payload["summary"].get("needs_action", []))
         by_id = {item["id"]: item for item in payload["summary"]["capability_ladder"]}
         self.assertFalse(by_id["active_recall_ready"]["ready"])
         self.assertEqual(
@@ -965,7 +969,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertTrue(payload["summary"]["agent_callable_host_ready"])
         self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
         self.assertNotIn("agent_callable", payload["summary"]["operator_blockers"])
-        self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
+        self.assertNotIn("agent_callable", payload["summary"].get("needs_action", []))
 
     def test_status_agent_json_is_compact_and_splits_host_from_current_thread(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
@@ -1015,17 +1019,15 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("agent_recall", current_thread_card["manual_instruction"])
         self.assertNotIn("call agent_recall", current_thread_card["command"])
         self.assertNotIn("<summary>", json.dumps(current_thread_card, ensure_ascii=False))
-        self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
+        self.assertNotIn("agent_callable", payload["summary"].get("needs_action", []))
         self.assertEqual(payload["summary"]["agent_callable_status"], "host_live_probe_ok_foreground_probe_not_checked")
         self.assertTrue(payload["summary"]["partial_readiness"])
         self.assertIn("hooks_status", payload["summary"]["deferred_components"])
         self.assertEqual(payload["summary"]["ambient_recall_stage"], "installed")
         self.assertEqual(payload["ambient_recall"]["stage"], "installed")
         self.assertIn("hooks:deferred", payload["ambient_recall"]["issue_codes"])
-        self.assertEqual(
-            payload["setup_card"]["operator_detail_command"],
-            "aippocampus update status --operator-json",
-        )
+        self.assertTrue(payload["details_available"])
+        self.assertNotIn("operator_detail_command", payload["setup_card"])
         self.assertNotIn("next_actions", payload)
         self.assertTrue(current_thread_card["command"].startswith("aippocampus "))
         self.assertNotIn(str(codex_home), raw)
@@ -1063,18 +1065,13 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(payload["ambient_recall"]["action_hints_useful"])
         self.assertFalse(payload["ambient_recall"]["hot_path_active"])
         self.assertIn("action_hints:with_missing_cache_file", payload["ambient_recall"]["issue_codes"])
-        action_hint_next = next(
-            item
-            for item in [payload["foreground_action"], *payload["safe_next_actions"]]
-            if item["surface"] == "action_hints"
-        )
+        action_surfaces = {payload["foreground_action"].get("surface")} | {
+            item.get("surface") for item in payload.get("safe_next_actions", [])
+        }
+        self.assertNotIn("action_hints", action_surfaces)
         self.assertEqual(
-            action_hint_next["command"],
-            "aippocampus hooks action probe --compact-json",
-        )
-        self.assertEqual(
-            action_hint_next["mutation_risk"],
-            "low_risk_local_cache_write",
+            payload["ambient_recall"]["next_command"],
+            "aippocampus doctor provider --json",
         )
         self.assertNotIn("refresh-cache --write", raw)
         self.assertNotIn("action_hints", payload)
@@ -1143,17 +1140,15 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("prompt_hook:latency_risk", ambient["issue_codes"])
         self.assertIn("warm_ambient:blocked_stale_pending", ambient["issue_codes"])
         self.assertIn("provider:missing_provider_env_var", ambient["issue_codes"])
-        self.assertGreaterEqual(
-            ambient["latency_risk"]["foreground_latency_red_line_violation_count"],
-            1,
-        )
+        self.assertEqual(ambient["latency_risk"]["status"], "near_host_timeout_risk")
+        self.assertNotIn("foreground_latency_red_line_violation_count", ambient["latency_risk"])
         self.assertTrue(ambient["warm_queue"]["stale_queue_blocked"])
         self.assertTrue(ambient["warm_queue"]["ordinary_recall_usable"])
         self.assertTrue(ambient["provider"]["degraded"])
         surfaces = {payload["foreground_action"].get("surface")} | {
-            item.get("surface") for item in payload["safe_next_actions"]
+            item.get("surface") for item in payload.get("safe_next_actions", [])
         }
-        self.assertIn("action_hints", surfaces)
+        self.assertNotIn("action_hints", surfaces)
         self.assertIn("prompt_hook_latency", surfaces)
         self.assertIn("warm_ambient", surfaces)
         self.assertEqual(ambient["next_command"], "aippocampus hooks prompt status --last --json")
@@ -1509,7 +1504,7 @@ class UpdateSyncTests(unittest.TestCase):
                 self.assertNotIn("operator_detail_command", payload)
                 self.assertNotIn("foreground_status_cards", payload)
                 self.assertNotIn("next_actions", payload)
-                self.assertTrue(payload["operator_detail_available"])
+                self.assertTrue(payload["details_available"])
                 self.assertFalse(
                     any(
                         action.get("surface") == "operator_detail"
@@ -1982,12 +1977,17 @@ class UpdateSyncTests(unittest.TestCase):
         server = installed_mcp["mcpServers"]["aippocampus"]
         self.assertNotEqual(server["command"], "python3")
         self.assertEqual(server["args"], ["-m", "aippocampus_runtime.cli.facade", "mcp"])
+        self.assertEqual(
+            server["env"]["PYTHONPATH"],
+            str((installed / "skills" / "aippocampus" / "scripts").resolve()),
+        )
         self.assertEqual(server["env"]["CODEX_HOME"], str(scenario.codex_home.resolve()))
         self.assertEqual(
             server["env"]["AIPPOCAMPUS_REGISTRY_DIR"],
             str((scenario.codex_home.resolve() / "aippocampus-registry")),
         )
         self.assertTrue(host_launch["command_updated"])
+        self.assertTrue(host_launch["package_runtime_env_present"])
 
     def test_plugin_apply_normalizes_installed_console_mcp_launch_and_env(self) -> None:
         with plugin_update_scenario() as scenario:
@@ -2026,12 +2026,17 @@ class UpdateSyncTests(unittest.TestCase):
         server = installed_mcp["mcpServers"]["aippocampus"]
         self.assertNotEqual(server["command"], "aippocampus")
         self.assertEqual(server["args"], ["-m", "aippocampus_runtime.cli.facade", "mcp"])
+        self.assertEqual(
+            server["env"]["PYTHONPATH"],
+            str((installed / "skills" / "aippocampus" / "scripts").resolve()),
+        )
         self.assertEqual(server["env"]["CODEX_HOME"], str(scenario.codex_home.resolve()))
         self.assertEqual(
             server["env"]["AIPPOCAMPUS_REGISTRY_DIR"],
             str((scenario.codex_home.resolve() / "aippocampus-registry")),
         )
         self.assertTrue(host_launch["command_updated"])
+        self.assertTrue(host_launch["package_runtime_env_present"])
         self.assertTrue(host_launch["codex_home_env_present"])
         self.assertTrue(host_launch["registry_dir_env_present"])
 
@@ -2046,6 +2051,7 @@ class UpdateSyncTests(unittest.TestCase):
             )
             mcp_data = json.loads((installed / ".mcp.json").read_text(encoding="utf-8"))
             mcp_data["mcpServers"]["aippocampus"]["env"] = {
+                "PYTHONPATH": str(scenario.root / "stale-runtime"),
                 "CODEX_HOME": str(scenario.root / "stale-codex-home"),
                 "AIPPOCAMPUS_REGISTRY_DIR": str(scenario.root / "stale-registry"),
             }
@@ -2079,6 +2085,10 @@ class UpdateSyncTests(unittest.TestCase):
         server = installed_mcp["mcpServers"]["aippocampus"]
         self.assertEqual(server["command"], fixed_command)
         self.assertEqual(server["args"], ["-m", "aippocampus_runtime.cli.facade", "mcp"])
+        self.assertEqual(
+            server["env"]["PYTHONPATH"],
+            str((installed / "skills" / "aippocampus" / "scripts").resolve()),
+        )
         self.assertEqual(server["env"]["CODEX_HOME"], str(scenario.codex_home.resolve()))
         self.assertEqual(
             server["env"]["AIPPOCAMPUS_REGISTRY_DIR"],
@@ -2087,7 +2097,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(host_launch["command_updated"])
         self.assertCountEqual(
             host_launch["env_keys_updated"],
-            ["CODEX_HOME", "AIPPOCAMPUS_REGISTRY_DIR"],
+            ["PYTHONPATH", "CODEX_HOME", "AIPPOCAMPUS_REGISTRY_DIR"],
         )
 
     def test_all_local_refreshes_configured_local_marketplace_without_extra_flag(self) -> None:

@@ -21,6 +21,7 @@ from aippocampus_runtime.hooks.debug_log import (
 )
 from aippocampus_runtime.hooks.skip_telemetry import write_skip_telemetry
 from aippocampus_runtime.ops import provider_key_bridge
+from tests.aippocampus.frontstage_assertions import assert_no_compact_policy_fields
 
 
 class InstallAmbientRecallHookTests(unittest.TestCase):
@@ -227,7 +228,7 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             "install_prompt_hook",
             {action["id"] for action in missing["safe_next_actions"]},
         )
-        self.assertEqual(missing["claim_boundary"], "host_setup_not_memory_evidence")
+        assert_no_compact_policy_fields(self, missing, surface="hooks_prompt_status_missing")
 
         installer.install(self.hooks_json, timeout=5)
         installed = installer.status(self.hooks_json)
@@ -239,8 +240,8 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         installed_action_ids = [action["id"] for action in installed["safe_next_actions"]]
         self.assertIn("try_first_recall_after_prompt_hook", installed_action_ids)
         self.assertNotIn("rollback_prompt_hook", installed_action_ids)
-        self.assertEqual(installed["manage_command"], "aippocampus hooks prompt uninstall --json")
         self.assertTrue(all(action["mutation_risk"] == "read_only" for action in installed["safe_next_actions"]))
+        assert_no_compact_policy_fields(self, installed, surface="hooks_prompt_status_installed")
 
         self.hooks_json.write_text(
             json.dumps(
@@ -272,6 +273,7 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             "refresh_prompt_hook",
             {action["id"] for action in stale["safe_next_actions"]},
         )
+        assert_no_compact_policy_fields(self, stale, surface="hooks_prompt_status_stale")
         self.assertNotIn("ambient_recall_hook.py", encoded)
 
     def test_uninstall_removes_only_ambient_hook(self) -> None:
@@ -358,11 +360,8 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         public_status = json.dumps(result, ensure_ascii=False)
         self.assertNotIn("last_prompt_hook", result)
         self.assertNotIn("prompt_hook_latency_risk", result)
-        self.assertTrue(result["operator_json_available"])
-        self.assertEqual(
-            result["operator_json_command"],
-            "aippocampus hooks prompt status --last --operator-json",
-        )
+        self.assertTrue(result["details_available"])
+        assert_no_compact_policy_fields(self, result, surface="hooks_prompt_status_last")
         self.assertEqual(result["path"], "hooks.json")
         self.assertTrue(result["path_redacted"])
         self.assertEqual(result["commands"], ["<redacted:hook-command>"])
@@ -424,11 +423,11 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["foreground_action"]["mutation_risk"], "read_only")
         self.assertIn("foreground_action", result)
         self.assertEqual(result["prompt_hook_latency_risk_status"], "near_host_timeout_risk")
-        self.assertGreaterEqual(result["foreground_latency_red_line_violation_count"], 1)
+        self.assertTrue(result["details_available"])
         action_ids = [action["id"] for action in result["safe_next_actions"]]
         self.assertNotIn("refresh_prompt_hook_safe_budget", action_ids)
         self.assertTrue(all(action["mutation_risk"] == "read_only" for action in result["safe_next_actions"]))
-        self.assertEqual(result["manage_command"], "aippocampus hooks prompt uninstall --json")
+        assert_no_compact_policy_fields(self, result, surface="hooks_prompt_status_latency")
         self.assertNotIn(str(self.codex_home), encoded)
 
         operator = installer.status(
@@ -488,12 +487,8 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             result["prompt_hook_latency_historical_status"],
             "historical_near_timeout_seen",
         )
-        self.assertEqual(result["foreground_latency_red_line_violation_count"], 0)
-        self.assertEqual(result["prompt_hook_near_timeout_event_count"], 0)
-        self.assertGreaterEqual(
-            result["historical_foreground_latency_red_line_violation_count"],
-            1,
-        )
+        self.assertTrue(result["details_available"])
+        assert_no_compact_policy_fields(self, result, surface="hooks_prompt_status_stale_latency")
         self.assertNotIn("refresh_prompt_hook_safe_budget", action_ids)
 
         operator = installer.status(

@@ -213,6 +213,28 @@ class AgentTraceAdmissionTests(unittest.TestCase):
         self.assertEqual(compact["status"], "diagnostic_only")
         self.assertNotIn("unknown_trace_families", compact)
 
+    def test_unknown_family_with_source_and_receipt_refs_reports_registration_drift(self) -> None:
+        row = {
+            "trace_id": "unknown-with-refs",
+            "family": "brand_new_family",
+            "source_refs": [{"message_id": "msg-new", "line": 3}],
+            "receipt_refs": [{"event_id": "evt-new"}],
+        }
+
+        classified = classify_trace_row(row)
+        detail = project_trace_admission([row], detail="operator")
+        compact = project_trace_admission([row], detail="compact")
+
+        self.assertEqual(classified["admission_level"], "operator_only")
+        self.assertEqual(
+            classified["reason"],
+            "unknown_trace_family_requires_registration",
+        )
+        self.assertEqual(classified["source_state"], "unknown_family_source_refs_and_receipts")
+        self.assertNotEqual(classified["source_state"], "missing_source_or_receipt")
+        self.assertEqual(detail["unknown_family_count"], 1)
+        self.assertNotIn("unknown_trace_families", compact)
+
     def test_behavior_source_ref_adapter_preserves_feedback_and_clean_receipt_refs(self) -> None:
         feedback_row = {
             "trace_id": "feedback-1",

@@ -40,6 +40,17 @@ class FeedbackVocabularyTests(unittest.TestCase):
             vocabulary.ACTIVE_FLOW_SIGNALS,
         )
 
+    def test_recall_outcomes_have_explicit_calibration_policy(self) -> None:
+        missing = sorted(
+            vocabulary.RECALL_OUTCOME_SIGNALS
+            - set(vocabulary.RECALL_OUTCOME_CALIBRATION_DELTAS)
+        )
+
+        self.assertEqual(missing, [])
+        self.assertGreater(vocabulary.RECALL_OUTCOME_CALIBRATION_DELTAS["user_confirmed_helpful"], 0)
+        self.assertGreater(vocabulary.RECALL_OUTCOME_CALIBRATION_DELTAS["manual_search_avoided"], 0)
+        self.assertLess(vocabulary.RECALL_OUTCOME_CALIBRATION_DELTAS["recall_added_noise"], 0)
+
     def test_recall_outcome_feedback_uses_shared_aliases(self) -> None:
         self.assertEqual(
             vocabulary.normalize_recall_outcome_signal("helped"),

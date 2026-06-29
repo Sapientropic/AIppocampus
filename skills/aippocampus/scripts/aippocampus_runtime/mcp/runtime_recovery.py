@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
+from aippocampus_runtime.foreground_compact_language import compact_frontstage_projection
 from aippocampus_runtime.privacy import redact_private_paths
 
 STALE_SIGNATURE_TYPEERROR_MARKERS = (
@@ -55,8 +56,10 @@ def foreground_mcp_runtime_recovery_payload(
         "claim_boundary": "no_claim_before_reopen",
         "why": "Use a concrete cue through the local CLI if the foreground MCP connection is stale.",
     }
-    return {
+    payload = {
         "kind": "aippocampus_foreground_mcp_runtime_recovery",
+        "detail": "compact",
+        "surface": "foreground_mcp_runtime_recovery_compact",
         "ok": False,
         "status": "foreground_mcp_runtime_mismatch",
         "tool_name": tool_name,
@@ -78,3 +81,4 @@ def foreground_mcp_runtime_recovery_payload(
             "cli_fallback_does_not_prove_foreground_mcp_recovered": True,
         },
     }
+    return compact_frontstage_projection(payload)

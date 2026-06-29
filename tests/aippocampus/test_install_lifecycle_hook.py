@@ -14,6 +14,7 @@ SCRIPTS = ROOT / "scripts"
 
 from aippocampus_runtime.hooks import install_lifecycle as installer
 from aippocampus_runtime.ops import provider_key_bridge
+from tests.aippocampus.frontstage_assertions import assert_no_compact_policy_fields
 
 
 class InstallMemoryMaintenanceHookTests(unittest.TestCase):
@@ -133,12 +134,12 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         missing = installer.public_lifecycle_result(installer.status(self.hooks_json))
         self.assertEqual(missing["status"], "missing")
         self.assertEqual(missing["foreground_action"]["id"], "install_lifecycle_hooks")
-        self.assertEqual(missing["claim_boundary"], "host_setup_not_memory_evidence")
         self.assertNotIn(missing["foreground_action"], missing["safe_next_actions"])
         self.assertNotIn(
             "install_lifecycle_hooks",
             {action["id"] for action in missing["safe_next_actions"]},
         )
+        assert_no_compact_policy_fields(self, missing, surface="hooks_lifecycle_status_missing")
 
         installer.install(self.hooks_json, timeout=12)
         installed = installer.public_lifecycle_result(installer.status(self.hooks_json))
@@ -148,8 +149,8 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         installed_action_ids = [action["id"] for action in installed["safe_next_actions"]]
         self.assertIn("check_lifecycle_hook_status", installed_action_ids)
         self.assertNotIn("rollback_lifecycle_hooks", installed_action_ids)
-        self.assertEqual(installed["manage_command"], "aippocampus hooks lifecycle uninstall --json")
         self.assertTrue(all(action["mutation_risk"] == "read_only" for action in installed["safe_next_actions"]))
+        assert_no_compact_policy_fields(self, installed, surface="hooks_lifecycle_status_installed")
 
         data = self.read_hooks()
         data["hooks"].pop("PostCompact", None)
@@ -159,6 +160,7 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         self.assertEqual(partial["status"], "partial")
         self.assertEqual(partial["foreground_action"]["id"], "refresh_lifecycle_hooks")
         self.assertIn("PostCompact", partial["missing_events"])
+        assert_no_compact_policy_fields(self, partial, surface="hooks_lifecycle_status_partial")
         self.assertNotIn(str(self.hooks_json), encoded)
         self.assertNotIn("aippocampus_runtime.hooks.lifecycle", encoded)
 
@@ -199,6 +201,27 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         self.assertIn("already-running hook process: not proven", text)
         self.assertIn("aippocampus doctor provider --json", text)
         self.assertNotIn(fixture_value, text)
+
+    def test_status_operator_json_flag_emits_parseable_json_without_json_flag(self) -> None:
+        installer.install(self.hooks_json, timeout=12)
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = installer.main(
+                [
+                    "status",
+                    "--hooks-json",
+                    str(self.hooks_json),
+                    "--operator-json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(payload["installed"])
+        self.assertIn("path", payload)
+        self.assertIn("events", payload)
+        self.assertNotEqual(payload["path"], "<local-path-redacted>")
 
     def test_uninstall_removes_only_maintenance_hooks(self) -> None:
         installer.install(self.hooks_json, timeout=12)

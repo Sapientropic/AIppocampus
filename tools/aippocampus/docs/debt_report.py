@@ -553,24 +553,9 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
         if warning:
             warnings.append(warning)
     for item in guard_pressure_rows:
-        if item.get("tracked_owner_issue"):
-            continue
-        warnings.append(
-            {
-                "code": "changed_surface_unowned_guard_pressure",
-                "path": item["path"],
-                "layer": item["layer"],
-                "current_count": item["current_count"],
-                "guard_budget": item["guard_budget"],
-                "margin": item["margin"],
-                "next_split_boundary": item["next_split_boundary"],
-                "acceptance_bearing": True,
-                "message": (
-                    "Touched exact-zero or single-digit guard owner without an issue/action "
-                    "pointer; split, shrink, or assign an owner before closeout."
-                ),
-            }
-        )
+        warning = guard_pressure.changed_surface_warning(item)
+        if warning:
+            warnings.append(warning)
     return {
         "changed_files": normalized,
         "status": "fail" if warnings else "pass",
@@ -578,8 +563,13 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
         "warnings": warnings,
         "guard_pressure": {
             "touched_count": len(guard_pressure_rows),
+            "parked_touched_count": sum(
+                1 for row in guard_pressure_rows if row.get("parked_by_policy")
+            ),
             "unowned_touched_count": sum(
-                1 for row in guard_pressure_rows if not row.get("tracked_owner_issue")
+                1
+                for row in guard_pressure_rows
+                if guard_pressure.pressure_row_is_unowned(row)
             ),
             "touched_files": guard_pressure_rows,
         },
@@ -659,9 +649,8 @@ def build_system_weight(
                     ),
                 }
             )
-        low_margin_owner = guard_pressure.low_margin_owner_issue(rel_path)
-        owner_metadata = guard_pressure.owner_issue_metadata(
-            low_margin_owner,
+        owner_metadata = guard_pressure.pressure_owner_metadata(
+            rel_path,
             owner_issue_states=owner_issue_states,
         )
         if margin <= SINGLE_DIGIT_GUARD_MARGIN_LIMIT:
@@ -736,12 +725,7 @@ def build_system_weight(
             "runtime_near_zero_count": near_zero_runtime_count,
             "runtime_over_budget_count": over_budget_runtime_count,
             "runtime_split_queue_count": len(near_zero_runtime_split_queue),
-            "single_digit_guard_pressure_count": len(single_digit_guard_pressure),
-            "unowned_single_digit_guard_pressure_count": sum(
-                1
-                for row in single_digit_guard_pressure
-                if not row.get("tracked_owner_issue")
-            ),
+            **guard_pressure.pressure_summary(single_digit_guard_pressure),
         },
         "near_zero_runtime_split_queue": near_zero_runtime_split_queue,
         "single_digit_guard_pressure": single_digit_guard_pressure,
@@ -971,20 +955,21 @@ def report_warnings(
                 "count": len(stale_allowances),
             }
         )
-    guard_pressure = list(single_digit_guard_pressure or [])
-    if guard_pressure:
-        unowned = [row for row in guard_pressure if not row.get("tracked_owner_issue")]
+    pressure_rows = list(single_digit_guard_pressure or [])
+    if pressure_rows:
+        summary = guard_pressure.pressure_summary(pressure_rows)
         warnings.append(
             {
                 "code": "architecture_debt_single_digit_guard_pressure",
                 "message": (
-                    f"{len(guard_pressure)} guard budget row(s) have single-digit headroom. "
+                    f"{len(pressure_rows)} guard budget row(s) have single-digit headroom. "
                     "Touching them should start with a split/trim plan, not late closeout cleanup."
                 ),
-                "count": len(guard_pressure),
-                "unowned_count": len(unowned),
-                "owned_count": len(guard_pressure) - len(unowned),
-                "sample_paths": [str(row.get("path")) for row in guard_pressure[:5]],
+                "count": len(pressure_rows),
+                "unowned_count": summary["unowned_single_digit_guard_pressure_count"],
+                "owned_count": summary["active_single_digit_guard_pressure_count"],
+                "parked_count": summary["parked_single_digit_guard_pressure_count"],
+                "sample_paths": [str(row.get("path")) for row in pressure_rows[:5]],
             }
         )
     return warnings

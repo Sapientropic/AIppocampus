@@ -16,6 +16,7 @@ from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     hook_seen_thread_ref,
     record_hook_seen_thread,
 )
+from tests.aippocampus.frontstage_assertions import assert_no_compact_policy_fields
 from tests.aippocampus.health_fixtures import health_workspace
 from tests.aippocampus.health_report_fixtures import (
     write_current_artifacts,
@@ -325,7 +326,6 @@ class AippocampusHealthTests(unittest.TestCase):
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("review_maintenance_plan", action_ids)
         self.assertNotIn("write_actions", payload)
-        self.assertEqual(payload["manage_command"], "aippocampus maintenance plan --summary-json")
         review_action = next(
             action for action in payload["safe_next_actions"] if action["id"] == "review_maintenance_plan"
         )
@@ -333,6 +333,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertTrue(payload["foreground_action"]["primary"]["ordinary_first_recall_usable"])
         self.assertTrue(payload["blocks_exact_latest_claims"])
         self.assertNotIn("freshness", payload)
+        assert_no_compact_policy_fields(self, payload, surface="health.agent_json")
 
     def test_agent_json_health_card_excludes_operator_only_objects(self) -> None:
         with (
@@ -400,7 +401,6 @@ class AippocampusHealthTests(unittest.TestCase):
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("review_maintenance_plan", action_ids)
         self.assertNotIn("write_actions", payload)
-        self.assertEqual(payload["manage_command"], "aippocampus maintenance plan --summary-json")
         self.assertEqual(payload["foreground_action"]["id"], "review_storage_gc_summary")
         self.assertEqual(
             payload["foreground_action"]["command"],
@@ -420,6 +420,7 @@ class AippocampusHealthTests(unittest.TestCase):
             "cwd",
         ):
             self.assertNotIn(operator_key, payload)
+        assert_no_compact_policy_fields(self, payload, surface="health.compact_json")
 
     def test_health_json_detail_full_keeps_operator_diagnostics(self) -> None:
         with (

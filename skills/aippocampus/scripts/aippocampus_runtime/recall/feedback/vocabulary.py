@@ -197,6 +197,26 @@ NOISY_OR_HARMFUL_RECALL_OUTCOME_SIGNALS = frozenset(
 NO_VISIBLE_EFFECT_RECALL_OUTCOME_SIGNALS = frozenset(
     {"ignored", "no_visible_effect", "blocked_boundary", "superseded"}
 )
+RECALL_OUTCOME_CALIBRATION_DELTAS = {
+    "accepted_route": 0.5,
+    "answer_improved_after_deepen": 0.8,
+    "blocked_boundary": -1.0,
+    "deepened": 0.5,
+    "dismissed_anti_nag": -0.9,
+    "ignored": 0.0,
+    "manual_search_avoided": 0.75,
+    "no_visible_effect": 0.0,
+    "prevented_failure": 0.75,
+    "recall_added_noise": -0.75,
+    "requery_after_miss": -0.6,
+    "source_reopen_success": 1.0,
+    "stale_route_revival": -0.4,
+    "superseded": -0.8,
+    "user_confirmed_helpful": 0.75,
+    "user_correction": -1.0,
+    "user_reprompted_with_thread_id": -0.5,
+    "wrong_route_drag": -1.0,
+}
 
 
 def normalize_feedback_signal(value: Any, *, default: str = "candidate_delivered") -> str:
@@ -239,6 +259,15 @@ def default_signal_delta(signal: Any) -> float:
     return DEFAULT_SIGNAL_DELTAS.get(normalize_feedback_signal(signal, default=""), 0.0)
 
 
+def recall_outcome_calibration_delta(outcome: Any) -> float | None:
+    """Return the explicit calibration delta for a normalized recall outcome."""
+
+    canonical = normalize_recall_outcome_signal(outcome, default="")
+    if canonical not in RECALL_OUTCOME_CALIBRATION_DELTAS:
+        return None
+    return RECALL_OUTCOME_CALIBRATION_DELTAS[canonical]
+
+
 def normalize_recall_outcome_signal(value: Any, *, default: str = "ignored") -> str:
     """Normalize recall outcome feedback without widening it into source evidence."""
 
@@ -273,6 +302,7 @@ __all__ = [
     "OUTCOME_ALIASES",
     "PARKED_FEEDBACK_SIGNALS",
     "POSITIVE_FEEDBACK_SIGNALS",
+    "RECALL_OUTCOME_CALIBRATION_DELTAS",
     "RECALL_OUTCOME_SIGNALS",
     "RECALL_OUTCOME_ALIASES",
     "SURFACE_FEEDBACK_SIGNALS",
@@ -282,4 +312,5 @@ __all__ = [
     "feedback_signal_polarity",
     "normalize_feedback_signal",
     "normalize_recall_outcome_signal",
+    "recall_outcome_calibration_delta",
 ]

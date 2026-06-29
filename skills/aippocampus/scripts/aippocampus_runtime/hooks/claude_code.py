@@ -20,6 +20,7 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
 )
+from aippocampus_runtime.foreground_compact_language import compact_frontstage_projection
 from aippocampus_runtime.hooks import claude_code_events
 from aippocampus_runtime.hooks.claude_code_handler import (
     SUPPORTED_HANDLER_EVENTS,
@@ -648,6 +649,39 @@ def status_report(
     }
 
 
+def public_status_report(report: dict[str, Any]) -> dict[str, Any]:
+    """Return the default compact Claude Code hook status card.
+
+    The full status report remains useful as operator evidence about the
+    official hook contract. The default foreground card should only show the
+    current host setup state and the next runnable action.
+    """
+
+    action_card = report.get("foreground_action_card")
+    card = action_card if isinstance(action_card, dict) else {}
+    unsupported = card.get("unsupported_events")
+    unsupported_summary = unsupported if isinstance(unsupported, dict) else {}
+    public = {
+        "ok": bool(report.get("ok", True)),
+        "host": report.get("host") or HOST,
+        "config_surface": report.get("config_surface") or CONFIG_SURFACE,
+        "settings": report.get("settings") or {},
+        "surface": card.get("surface") or "claude_code_hooks_status",
+        "status": card.get("status") or (report.get("settings") or {}).get("status"),
+        "supported_installable_events": card.get("supported_installable_events") or [],
+        "supported_installed_or_firing_events": (
+            card.get("supported_installed_or_firing_events") or []
+        ),
+        "unsupported_event_count": int(unsupported_summary.get("count") or 0),
+        **canonical_foreground_action_fields(
+            dict(card.get("primary") or report.get("foreground_action") or {}),
+            safe_next_actions=list(card.get("safe_next_actions") or []),
+        ),
+        "operator_detail_available": True,
+    }
+    return compact_frontstage_projection(public)
+
+
 def dry_run_report(*, settings_path: Path | None = None) -> dict[str, Any]:
     settings_path = default_settings_path() if settings_path is None else settings_path
     command_report = handler_command_report()
@@ -838,6 +872,8 @@ def main(argv: list[str] | None = None) -> int:
         payload = synthetic_smoke_report()
     else:
         payload = status_report(settings_path=args.settings_json, event_log_path=args.event_log)
+        if args.json_output:
+            payload = public_status_report(payload)
 
     if args.json_output:
         print_json(payload)

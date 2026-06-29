@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from aippocampus_runtime.foreground_action_lint import compact_foreground_action_violations
+from aippocampus_runtime.foreground_compact_language import (
+    COMPACT_CONTROL_SURFACE_FIELD_DENYLIST,
+    COMPACT_POLICY_FIELD_DENYLIST,
+)
 from aippocampus_runtime.mcp.compact_profile import COMPACT_DEBUG_FIELD_DENYLIST
 
 PathComponent = str | int
@@ -142,45 +146,7 @@ COMPACT_DETAIL_AFFORDANCE_ALLOWLIST: dict[
             removal_condition="remove with agent_recall.template_detail command template",
         ),
     },
-    "cli.agent_aippo.needs_input": {
-        (
-            "operator_json_command_template",
-        ): _detail_policy(
-            owner="agent aippo CLI foreground card",
-            reason="The AIppo parent card needs one operator JSON template for explicit diagnostic mode.",
-            default_exposure="template_only operator JSON path; not a safe_next_action",
-            removal_condition="remove when the no-input AIppo card has a non-command detail affordance",
-        ),
-        (
-            "operator_json_requires",
-        ): _detail_policy(
-            owner="agent aippo CLI foreground card",
-            reason="The operator JSON template must name the missing task cue.",
-            default_exposure="required-input metadata beside the template",
-            removal_condition="remove with cli.agent_aippo.needs_input command template",
-        ),
-        (
-            "claim_boundary",
-            "detail_available_with_template",
-        ): _detail_policy(
-            owner="agent aippo CLI foreground card",
-            reason=(
-                "The claim boundary may point at the same operator JSON "
-                "template without serializing diagnostics."
-            ),
-            default_exposure="claim boundary names the template-only detail path",
-            removal_condition="remove with cli.agent_aippo.needs_input command template",
-        ),
-        (
-            "claim_boundary",
-            "detail_requires",
-        ): _detail_policy(
-            owner="agent aippo CLI foreground card",
-            reason="The claim-boundary template must also declare its missing task cue.",
-            default_exposure="required-input metadata beside the claim-boundary template",
-            removal_condition="remove with cli.agent_aippo.needs_input command template",
-        ),
-    },
+    "cli.agent_aippo.needs_input": {},
     "cli.navigate.needs_cue": {
         (
             "lanes",
@@ -356,6 +322,42 @@ def assert_no_compact_debug_fields(
         compact_debug_field_paths(payload),
         [],
         f"compact surface {surface} leaked detail/operator fields",
+    )
+
+
+def compact_policy_field_paths(
+    value: Any,
+    path: tuple[PathComponent, ...] = (),
+) -> list[str]:
+    denied = COMPACT_POLICY_FIELD_DENYLIST | COMPACT_CONTROL_SURFACE_FIELD_DENYLIST
+    if isinstance(value, Mapping):
+        paths: list[str] = []
+        for key, child in value.items():
+            child_path = (*path, str(key))
+            if str(key) in denied:
+                paths.append(_format_path(child_path))
+            paths.extend(compact_policy_field_paths(child, child_path))
+        return paths
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+        paths = []
+        for index, child in enumerate(value):
+            paths.extend(compact_policy_field_paths(child, (*path, index)))
+        return paths
+    return []
+
+
+def assert_no_compact_policy_fields(
+    test: Any,
+    payload: Mapping[str, Any],
+    *,
+    surface: str,
+) -> None:
+    """Assert default compact/frontstage JSON did not leak operator policy fields."""
+
+    test.assertEqual(
+        compact_policy_field_paths(payload),
+        [],
+        f"compact surface {surface} leaked policy/operator fields",
     )
 
 

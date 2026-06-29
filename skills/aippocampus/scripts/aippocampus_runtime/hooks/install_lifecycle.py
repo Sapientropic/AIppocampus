@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import codex_home
+from aippocampus_runtime.foreground_compact_language import compact_frontstage_projection
 from aippocampus_runtime.hooks.foreground_status import (
     hook_install_closeout_contract,
     lifecycle_status_contract,
@@ -470,7 +471,7 @@ def public_lifecycle_result(result: dict[str, Any]) -> dict[str, Any]:
         "hook_command_serialized": False,
         "operator_json_required_for_raw_hook_wiring": True,
     }
-    return public
+    return compact_frontstage_projection(public)
 
 
 def public_lifecycle_install_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -535,7 +536,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         result = status(path, script, module=args.module)
 
-    if args.json_output:
+    if args.json_output or args.operator_json:
         if args.operator_json:
             output = result
         elif args.action == "install":

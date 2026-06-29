@@ -84,7 +84,8 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         templates = [item["command_template"] for item in payload["safe_next_actions"] if item.get("command_template")]
         commands = [item["command"] for item in payload["safe_next_actions"] if item.get("command")]
         self.assertIn('aippocampus search "{exact_phrase}" --json', templates)
-        self.assertIn("aippocampus onboard --provider auto --status --json", commands)
+        self.assertEqual(commands, [])
+        self.assertLessEqual(len(payload["safe_next_actions"]), 1)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("old decision or handoff cue", encoded)
         self.assertNotIn("distinctive exact phrase", encoded)

@@ -17,6 +17,7 @@ from aippocampus_runtime.contract_command_safety import (
     executable_command_violations,  # noqa: F401 - re-exported public helper
     shell_quote,  # noqa: F401 - re-exported public helper
 )
+from aippocampus_runtime.foreground_compact_language import compact_frontstage_projection
 
 PUBLIC_RUNTIME_ENVELOPE_FIELDS = (
     "ok",
@@ -577,7 +578,7 @@ def foreground_recovery_card(
             "safe_next_actions": [],
         }
     )
-    return {
+    payload = {
         "kind": kind,
         "ok": False,
         "status": status,
@@ -592,6 +593,7 @@ def foreground_recovery_card(
             }
         ),
     }
+    return compact_frontstage_projection(payload)
 
 
 def write_boundary(
