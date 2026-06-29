@@ -717,6 +717,132 @@ def build_tier_report(
     }
 
 
+def _compact_budget(budget: object) -> dict[str, object] | None:
+    if not isinstance(budget, Mapping):
+        return None
+    row: dict[str, object] = {
+        "module_count_target": budget.get("module_count_target"),
+        "test_count_target": budget.get("test_count_target"),
+        "module_count_status": budget.get("module_count_status"),
+        "test_count_status": budget.get("test_count_status"),
+        "budget_outcome": budget.get("budget_outcome"),
+    }
+    return {key: value for key, value in row.items() if value not in (None, "", [], {})}
+
+
+def _compact_growth_review(review: object) -> dict[str, object] | None:
+    if not isinstance(review, Mapping):
+        return None
+    row: dict[str, object] = {
+        "status": review.get("status"),
+        "module_count_review_threshold": review.get("module_count_review_threshold"),
+        "test_count_review_threshold": review.get("test_count_review_threshold"),
+    }
+    return {key: value for key, value in row.items() if value not in (None, "", [], {})}
+
+
+def _compact_benchmark_shape(summary: object) -> dict[str, object] | None:
+    if not isinstance(summary, Mapping):
+        return None
+    keys = (
+        "fast_lane_module_count",
+        "evidence_module_count",
+        "benchmark_module_count",
+    )
+    return {key: summary[key] for key in keys if key in summary}
+
+
+def _tier_report_warning(tier: str, row: Mapping[str, object]) -> dict[str, object] | None:
+    budget = row.get("budget")
+    if isinstance(budget, Mapping) and budget.get("budget_outcome") not in (
+        None,
+        "within_target",
+    ):
+        warning: dict[str, object] = {
+            "code": "tier_count_budget_drift",
+            "tier": tier,
+            "module_count": row.get("module_count"),
+            "test_count": row.get("test_count"),
+            "budget_outcome": budget.get("budget_outcome"),
+            "module_count_status": budget.get("module_count_status"),
+            "test_count_status": budget.get("test_count_status"),
+        }
+        action = budget.get("recommended_action")
+        if isinstance(action, Mapping):
+            warning["recommended_action"] = dict(action)
+        return warning
+    review = row.get("growth_review")
+    if isinstance(review, Mapping) and review.get("status") == "review_recommended":
+        warning = {
+            "code": "tier_growth_review_recommended",
+            "tier": tier,
+            "module_count": row.get("module_count"),
+            "test_count": row.get("test_count"),
+            "status": review.get("status"),
+        }
+        action = review.get("recommended_action")
+        if isinstance(action, Mapping):
+            warning["recommended_action"] = dict(action)
+        return warning
+    return None
+
+
+def compact_tier_report(full_report: Mapping[str, object]) -> dict[str, object]:
+    """Project the no-run tier catalog into an agent-sized status card."""
+
+    raw_tiers = full_report.get("tiers")
+    tiers = raw_tiers if isinstance(raw_tiers, Mapping) else {}
+    compact_tiers: dict[str, dict[str, object]] = {}
+    warnings: list[dict[str, object]] = []
+    for tier, raw_row in tiers.items():
+        if not isinstance(raw_row, Mapping):
+            continue
+        row: dict[str, object] = {
+            "module_count": raw_row.get("module_count"),
+            "test_count": raw_row.get("test_count"),
+        }
+        budget = _compact_budget(raw_row.get("budget"))
+        if budget:
+            row["budget"] = budget
+        growth_review = _compact_growth_review(raw_row.get("growth_review"))
+        if growth_review:
+            row["growth_review"] = growth_review
+        benchmark_shaped = _compact_benchmark_shape(raw_row.get("benchmark_shaped"))
+        if benchmark_shaped:
+            row["benchmark_shaped"] = benchmark_shaped
+        warning = _tier_report_warning(str(tier), raw_row)
+        if warning:
+            warnings.append(warning)
+        compact_tiers[str(tier)] = row
+
+    status = "advisory_action_recommended" if warnings else "pass"
+    timing_artifacts = full_report.get("timing_artifacts")
+    timing_rows = timing_artifacts if isinstance(timing_artifacts, list) else []
+    return {
+        "kind": "aippocampus_test_tier_report_compact",
+        "schema_version": 1,
+        "detail": "compact",
+        "runner_version": full_report.get("runner_version"),
+        "generated_at": full_report.get("generated_at"),
+        "ok": True,
+        "status": status,
+        "warning_count": len(warnings),
+        "first_warning": warnings[0] if warnings else None,
+        "tier_count": len(compact_tiers),
+        "tiers": compact_tiers,
+        "timing_artifacts": {
+            "count": len(timing_rows),
+            "first_status": (
+                timing_rows[0].get("status")
+                if timing_rows and isinstance(timing_rows[0], Mapping)
+                else None
+            ),
+        },
+        "catalog_detail_deferred": True,
+        "detail_command": "python tools/aippocampus/run_tests.py --report-json --detail full",
+    }
+
+
 def _probe_tempdir(parent: Path) -> None:
     parent.mkdir(parents=True, exist_ok=True)
     temp_context = tempfile.TemporaryDirectory(prefix=TEMP_PROBE_PREFIX, dir=str(parent))
@@ -975,7 +1101,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--report-json",
         action="store_true",
-        help="Print tier module/test counts as JSON without running tests.",
+        help=(
+            "Print compact tier module/test counts as JSON without running tests. "
+            "Use --detail full for the full tier catalog."
+        ),
+    )
+    parser.add_argument(
+        "--detail",
+        choices=("compact", "full"),
+        default="compact",
+        help="Output detail for --report-json; default compact keeps catalog inventories deferred.",
     )
     parser.add_argument(
         "--timing-artifact",
@@ -1024,8 +1159,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.timing_artifact
             else default_timing_artifact_paths()
         )
+        report = build_tier_report(timing_artifact_paths=timing_artifacts)
+        if args.detail == "compact":
+            report = compact_tier_report(report)
         json.dump(
-            build_tier_report(timing_artifact_paths=timing_artifacts),
+            report,
             sys.stdout,
             ensure_ascii=False,
             indent=2,

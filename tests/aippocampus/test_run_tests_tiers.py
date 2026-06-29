@@ -318,10 +318,27 @@ class RunTestsTierTests(unittest.TestCase):
             )
         )
 
-    def test_report_json_cli_prints_report_without_running_tests(self) -> None:
+    def test_report_json_cli_prints_compact_report_without_running_tests(self) -> None:
         report = {
             "kind": "aippocampus_test_tier_report",
-            "tiers": {"pr": {"module_count": 1, "test_count": 2}},
+            "schema_version": 2,
+            "runner_version": "test-runner",
+            "generated_at": "2026-06-29T15:00:00Z",
+            "tier_definitions": {"pr": "full catalog detail"},
+            "tier_aliases": {},
+            "tier_shrink_replacement_lanes": {},
+            "tiers": {
+                "pr": {
+                    "module_count": 1,
+                    "test_count": 2,
+                    "budget": None,
+                    "growth_review": None,
+                    "benchmark_shaped": {"evidence_module_count": 0},
+                    "top_modules": [{"module": "tests.fake", "test_count": 2}],
+                }
+            },
+            "timing_artifacts": [],
+            "known_limitations": ["full detail only"],
         }
 
         with (
@@ -335,8 +352,85 @@ class RunTestsTierTests(unittest.TestCase):
             payload = json.loads(stdout.getvalue())
 
         self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_test_tier_report_compact")
+        self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(payload["status"], "pass")
+        self.assertEqual(payload["warning_count"], 0)
+        self.assertEqual(payload["tiers"]["pr"]["module_count"], 1)
+        self.assertIn("--detail full", payload["detail_command"])
+        encoded = json.dumps(payload)
+        self.assertNotIn("tier_definitions", encoded)
+        self.assertNotIn("tier_aliases", encoded)
+        self.assertNotIn("tier_shrink_replacement_lanes", encoded)
+        self.assertNotIn("top_modules", encoded)
+        self.assertNotIn("known_limitations", encoded)
+        run_modules.assert_not_called()
+
+    def test_report_json_cli_full_detail_preserves_catalog(self) -> None:
+        report = {
+            "kind": "aippocampus_test_tier_report",
+            "tier_definitions": {"pr": "full catalog detail"},
+            "tier_aliases": {},
+            "tier_shrink_replacement_lanes": {"tests.full": {"replacement_lane": "pr-core"}},
+            "tiers": {
+                "pr": {
+                    "module_count": 1,
+                    "test_count": 2,
+                    "top_modules": [{"module": "tests.fake", "test_count": 2}],
+                }
+            },
+            "timing_artifacts": [{"status": "current"}],
+            "known_limitations": ["operator catalog detail"],
+        }
+
+        with (
+            io.StringIO() as stdout,
+            contextlib.redirect_stdout(stdout),
+            mock.patch.object(run_tests, "ensure_usable_tempdir", return_value=Path(".")),
+            mock.patch.object(run_tests, "build_tier_report", return_value=report),
+            mock.patch.object(run_tests, "run_modules") as run_modules,
+        ):
+            exit_code = run_tests.main(["--report-json", "--detail", "full"])
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(exit_code, 0)
         self.assertEqual(payload, report)
         run_modules.assert_not_called()
+
+    def test_compact_tier_report_surfaces_budget_warning_action(self) -> None:
+        report = {
+            "runner_version": "test-runner",
+            "generated_at": "2026-06-29T15:00:00Z",
+            "tiers": {
+                "pr": {
+                    "module_count": 71,
+                    "test_count": 501,
+                    "budget": run_tests.count_budget_for_tier(
+                        "pr",
+                        module_count=71,
+                        test_count=501,
+                    ),
+                    "growth_review": None,
+                    "benchmark_shaped": {"evidence_module_count": 0},
+                    "top_modules": [
+                        {"module": "tests.aippocampus.test_heavy", "test_count": 100}
+                    ],
+                }
+            },
+            "timing_artifacts": [],
+        }
+
+        payload = run_tests.compact_tier_report(report)
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "advisory_action_recommended")
+        self.assertEqual(payload["warning_count"], 1)
+        self.assertEqual(payload["first_warning"]["code"], "tier_count_budget_drift")
+        self.assertEqual(
+            payload["first_warning"]["recommended_action"]["id"],
+            "review_pr_tier_budget_drift",
+        )
+        self.assertNotIn("top_modules", json.dumps(payload))
 
     def test_shard_modules_is_stable_by_sorted_module_name(self) -> None:
         modules = [
