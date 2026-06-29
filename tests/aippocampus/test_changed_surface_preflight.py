@@ -786,6 +786,37 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
         self.assertNotIn("skipped_by_mode", report)
         self.assertIn("--detail full", report["detail_command"])
 
+    def test_compact_preflight_large_base_surface_uses_summary_not_file_wall(self) -> None:
+        changed_files = [f"docs/large-surface/file-{index:02d}.md" for index in range(40)]
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "collect_changed_files", return_value=changed_files),
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(changed_files=[], base="HEAD~40")
+
+        encoded = str(report)
+        self.assertEqual(report["changed_file_count"], 40)
+        self.assertEqual(len(report["changed_surface"]["affected_files"]), 3)
+        self.assertTrue(report["changed_surface"]["affected_files_truncated"])
+        self.assertNotIn("changed_files", report["changed_surface"])
+        self.assertIn("--base HEAD~40", report["detail_command"])
+        self.assertIn("--base HEAD~40", report["closeout_command"])
+        self.assertNotIn("planner_detail_command", report)
+        self.assertNotIn("--changed-file docs/large-surface/file-39.md", encoded)
+
     def test_compact_preflight_fail_keeps_first_blocker_not_full_internals(self) -> None:
         def fake_command(command: str) -> preflight.CommandResult:
             failed = command == preflight.test_plan.CI_RUFF_COMMAND

@@ -22,6 +22,7 @@ from aippocampus_runtime.contracts import (
 )
 from aippocampus_runtime.dream import lifecycle as dream_lifecycle
 from aippocampus_runtime.dream import working_memory_publication
+from aippocampus_runtime.foreground_compact_language import strip_compact_policy_vocabulary
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import background_finding_actions, background_finding_projection
 from aippocampus_runtime.subconscious import candidate_router
@@ -179,11 +180,11 @@ def _read_only_actions(finding: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _compact_action(action: Mapping[str, Any]) -> dict[str, Any]:
-    return {
-        key: value
-        for key, value in action.items()
-        if key
-        in {
+    # Background findings predate the shared compact-profile cleanup and used
+    # to hand-roll this allowlist. Keep the local action vocabulary narrow, but
+    # run every retained value through the common compact denylist so nested
+    # fallbacks cannot reintroduce claim/source/operator proof fields.
+    allowed_keys = {
             "id",
             "label",
             "command",
@@ -191,14 +192,17 @@ def _compact_action(action: Mapping[str, Any]) -> dict[str, Any]:
             "requires",
             "template_only",
             "mutation_risk",
-            "claim_boundary",
             "why",
             "tool_name",
             "arguments",
             "arguments_template",
+            "cli_fallback",
         }
-        and value not in (None, "", [], {})
-    }
+    compacted = strip_compact_policy_vocabulary(
+        {key: value for key, value in action.items() if key in allowed_keys},
+        max_safe_actions=1,
+    )
+    return dict(compacted) if isinstance(compacted, Mapping) else {}
 
 
 def _finding_summary(finding: Mapping[str, Any], *, detail_level: str = "compact") -> dict[str, Any]:

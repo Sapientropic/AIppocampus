@@ -70,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {command['reason']}")
         return 0
 
+    changed_files_from_base = not bool(args.changed_file)
     changed_files = (
         sorted({planner._repo_relative(path) for path in args.changed_file})
         if args.changed_file
@@ -85,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
                 changed_files=changed_files,
                 base=args.base,
                 local_executable=args.local_executable,
+                changed_files_from_base=changed_files_from_base,
             )
         )
         json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)

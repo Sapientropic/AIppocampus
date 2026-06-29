@@ -171,7 +171,7 @@ def _run_recall_command(args: Namespace, json_out: JsonOut) -> int:
 def _run_aippo_command(args: Namespace, json_out: JsonOut) -> int:
     task = args.task_flag or " ".join(args.task)
     payload = activate_aippo(task=task)
-    if args.json:
+    if args.json or args.operator_json:
         guidance_card = compact_aippo_guidance_card(payload, task=task)
         if args.operator_json:
             payload = _operator_aippo_payload_with_foreground_card(
@@ -197,7 +197,7 @@ def _run_background_command(args: Namespace, json_out: JsonOut) -> int:
         limit=args.max,
         detail="operator" if args.operator_json else args.detail,
     )
-    if args.json:
+    if args.json or args.operator_json:
         json_out(payload)
     else:
         print(
@@ -220,14 +220,14 @@ def _run_macro_command(args: Namespace, json_out: JsonOut) -> int:
     macro_cue = " ".join(args.cue).strip()
     if macro_cue and not args.init_template and not args.explain_schema:
         payload = _macro_positional_cue_payload(macro_cue, project=args.project)
-        if args.json:
+        if args.json or args.operator_json:
             json_out(payload)
         else:
             print(_render_macro_recovery_text(payload))
         return 2
     if args.init_template:
         payload = macro_state_template(args.project)
-        if args.json:
+        if args.json or args.operator_json:
             json_out(payload)
         else:
             print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
@@ -237,7 +237,7 @@ def _run_macro_command(args: Namespace, json_out: JsonOut) -> int:
             args.project,
             schema_version=MACRO_PACKET_SCHEMA_VERSION,
         )
-        if args.json:
+        if args.json or args.operator_json:
             json_out(payload)
         else:
             print(render_macro_schema_human(payload))
@@ -248,7 +248,7 @@ def _run_macro_command(args: Namespace, json_out: JsonOut) -> int:
         cwd=args.cwd,
         detail="full" if args.operator_json else args.detail,
     )
-    if args.json:
+    if args.json or args.operator_json:
         json_out(payload)
     else:
         print(render_macro_human(payload))
@@ -478,7 +478,7 @@ def _run_feedback_command(args: Namespace, json_out: JsonOut) -> int:
             schema_version=SCHEMA_VERSION,
             kind=KIND,
         )
-        if args.json:
+        if args.json or args.operator_json:
             json_out(payload)
         else:
             print("AIppocampus agent feedback: route_id required")

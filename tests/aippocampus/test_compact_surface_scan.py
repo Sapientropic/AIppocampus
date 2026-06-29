@@ -35,6 +35,13 @@ class CompactSurfaceScanTests(unittest.TestCase):
         self.assertTrue(check["has_structured_content"])
         self.assertEqual(check["denied_field_paths"], [])
 
+    def test_cli_scan_covers_background_success_and_recovery_paths(self) -> None:
+        self.assertIn("aippocampus agent background --json", compact_surface_scan.CLI_COMMANDS)
+        self.assertIn(
+            'aippocampus agent background "compact foreground audit" --json',
+            compact_surface_scan.CLI_COMMANDS,
+        )
+
     def test_mcp_key_tool_compact_scan_covers_aippo_and_background(self) -> None:
         checks = compact_surface_scan.scan_mcp_key_tool_compact_cards(
             cwd=compact_surface_scan.PATHS.repo_root,
@@ -42,7 +49,11 @@ class CompactSurfaceScanTests(unittest.TestCase):
 
         self.assertEqual(
             [check["surface"] for check in checks],
-            ["mcp_tool:agent_aippo", "mcp_tool:agent_background"],
+            [
+                "mcp_tool:agent_aippo",
+                "mcp_tool:agent_background",
+                "mcp_tool:agent_background_missing_input",
+            ],
         )
         for check in checks:
             self.assertTrue(check["ok"], check)

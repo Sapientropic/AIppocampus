@@ -737,6 +737,29 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertNotIn("python_environment", payload)
         self.assertNotIn("warnings", payload)
 
+    def test_cli_compact_large_changed_surface_uses_summary_not_full_file_wall(self) -> None:
+        changed_files = [f"docs/large-surface/file-{index:02d}.md" for index in range(40)]
+        with (
+            io.StringIO() as stdout,
+            contextlib.redirect_stdout(stdout),
+            mock.patch.object(test_plan, "collect_changed_files", return_value=changed_files),
+            mock.patch.object(test_plan, "_debt_report_is_red", return_value=False),
+        ):
+            exit_code = test_plan.main(["--json", "--detail", "compact", "--base", "HEAD~40"])
+            payload = json.loads(stdout.getvalue())
+
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["changed_surface"]["changed_file_count"], 40)
+        self.assertEqual(len(payload["changed_surface"]["affected_files"]), 3)
+        self.assertTrue(payload["changed_surface"]["affected_files_truncated"])
+        self.assertEqual(payload["changed_surface"]["input_source"], "base_diff")
+        self.assertNotIn("changed_files", payload["changed_surface"])
+        self.assertIn("--base HEAD~40", payload["preflight_command"])
+        self.assertIn("--base HEAD~40", payload["detail_command"])
+        self.assertNotIn("--changed-file docs/large-surface/file-39.md", encoded)
+        self.assertLess(len(encoded), 5000)
+
     def test_cli_json_full_preserves_complete_changed_surface_plan(self) -> None:
         with (
             io.StringIO() as stdout,
@@ -759,6 +782,20 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn("python_environment", payload)
         self.assertIn("verification_ownership", payload)
         self.assertIn("manual_required_claims", payload)
+
+    def test_cli_full_large_changed_surface_preserves_complete_file_list(self) -> None:
+        changed_files = [f"docs/large-surface/file-{index:02d}.md" for index in range(40)]
+        with (
+            io.StringIO() as stdout,
+            contextlib.redirect_stdout(stdout),
+            mock.patch.object(test_plan, "collect_changed_files", return_value=changed_files),
+            mock.patch.object(test_plan, "_debt_report_is_red", return_value=False),
+        ):
+            exit_code = test_plan.main(["--json", "--detail", "full", "--base", "HEAD~40"])
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["changed_files"], changed_files)
 
     def test_release_preflight_cli_emits_json_without_changed_file_scan(self) -> None:
         with (

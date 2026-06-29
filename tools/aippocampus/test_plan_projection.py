@@ -6,6 +6,8 @@ from test_plan_commands import py_script, shell_arg
 
 COMMAND_COMPACT_KEYS = (
     "command",
+    "command_preview",
+    "command_truncated",
     "scope",
     "gate_class",
     "verification_owner",
@@ -14,10 +16,24 @@ COMMAND_COMPACT_KEYS = (
     "ci_owned",
     "default_local",
 )
+COMPACT_CHANGED_FILE_SAMPLE_LIMIT = 3
+COMPACT_CATEGORY_SAMPLE_LIMIT = 8
+COMPACT_COMMAND_CHAR_LIMIT = 360
 
 
 def _changed_file_args(changed_files: Sequence[str]) -> str:
     return " ".join(f"--changed-file {shell_arg(path)}" for path in changed_files)
+
+
+def _changed_surface_args(
+    *,
+    changed_files: Sequence[str],
+    base: str,
+    changed_files_from_base: bool,
+) -> str:
+    if changed_files and not changed_files_from_base:
+        return _changed_file_args(changed_files)
+    return f"--base {shell_arg(base)}"
 
 
 def _detail_command(
@@ -26,16 +42,20 @@ def _detail_command(
     base: str,
     release_preflight: bool,
     local_executable: bool,
+    changed_files_from_base: bool = False,
 ) -> str:
     args = ["--json", "--detail full"]
     if release_preflight:
         args.append("--release-preflight")
     if local_executable:
         args.append("--local-executable")
-    if changed_files:
-        args.append(_changed_file_args(changed_files))
-    else:
-        args.append(f"--base {shell_arg(base)}")
+    args.append(
+        _changed_surface_args(
+            changed_files=changed_files,
+            base=base,
+            changed_files_from_base=changed_files_from_base,
+        )
+    )
     return py_script("tools/aippocampus/test_plan.py", " ".join(args))
 
 
@@ -44,22 +64,51 @@ def _preflight_command(
     changed_files: Sequence[str],
     base: str,
     local_executable: bool,
+    changed_files_from_base: bool = False,
 ) -> str:
     args = ["--json"]
     if local_executable:
         args.append("--local-executable")
-    if changed_files:
-        args.append(_changed_file_args(changed_files))
-    else:
-        args.append(f"--base {shell_arg(base)}")
+    args.append(
+        _changed_surface_args(
+            changed_files=changed_files,
+            base=base,
+            changed_files_from_base=changed_files_from_base,
+        )
+    )
     return py_script("tools/aippocampus/changed_surface_preflight.py", " ".join(args))
 
 
 def _compact_command(item: Mapping[str, Any]) -> dict[str, Any]:
+    row: dict[str, Any] = {}
+    for key in COMMAND_COMPACT_KEYS:
+        if key not in item or item[key] in {None, ""}:
+            continue
+        if key == "command":
+            command = str(item[key])
+            if len(command) > COMPACT_COMMAND_CHAR_LIMIT:
+                row["command_preview"] = command[:COMPACT_COMMAND_CHAR_LIMIT].rstrip()
+                row["command_truncated"] = True
+                continue
+        row[key] = item[key]
+    return row
+
+
+def _changed_surface_summary(
+    *,
+    changed_files: Sequence[str],
+    categories: Sequence[Any],
+    changed_files_from_base: bool,
+) -> dict[str, Any]:
+    sample = list(changed_files[:COMPACT_CHANGED_FILE_SAMPLE_LIMIT])
+    category_sample = [str(item) for item in categories[:COMPACT_CATEGORY_SAMPLE_LIMIT]]
     return {
-        key: item[key]
-        for key in COMMAND_COMPACT_KEYS
-        if key in item and item[key] not in {None, ""}
+        "changed_file_count": len(changed_files),
+        "affected_files": sample,
+        "affected_files_truncated": len(changed_files) > len(sample),
+        "category_summary": category_sample,
+        "category_summary_truncated": len(categories) > len(category_sample),
+        "input_source": "base_diff" if changed_files_from_base else "explicit_changed_files",
     }
 
 
@@ -103,6 +152,7 @@ def compact_changed_surface_plan(
     changed_files: Sequence[str],
     base: str,
     local_executable: bool,
+    changed_files_from_base: bool = False,
 ) -> dict[str, Any]:
     warnings = list(plan.get("warnings") or [])
     commands = list(plan.get("commands") or [])
@@ -115,11 +165,11 @@ def compact_changed_surface_plan(
         "schema_version": 1,
         "ok": not has_manual_required,
         "status": "manual_required" if has_manual_required else "pass",
-        "changed_surface": {
-            "changed_file_count": len(changed_files),
-            "changed_files": list(changed_files),
-            "categories": list(plan.get("categories") or []),
-        },
+        "changed_surface": _changed_surface_summary(
+            changed_files=changed_files,
+            categories=list(plan.get("categories") or []),
+            changed_files_from_base=changed_files_from_base,
+        ),
         "blockers": [],
         "warning_count": len(warnings),
         "first_warning": _first_warning(warnings),
@@ -127,6 +177,7 @@ def compact_changed_surface_plan(
             changed_files=changed_files,
             base=base,
             local_executable=local_executable,
+            changed_files_from_base=changed_files_from_base,
         ),
         "planned_command_count": len(commands),
         "next_commands": _compact_next_commands(commands),
@@ -139,6 +190,7 @@ def compact_changed_surface_plan(
             base=base,
             release_preflight=False,
             local_executable=local_executable,
+            changed_files_from_base=changed_files_from_base,
         ),
     }
 

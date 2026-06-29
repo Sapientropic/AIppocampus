@@ -63,6 +63,9 @@ CHANGED_FILE_ARG_RE = re.compile(
     r"\s+--changed-file\s+(?P<path>\"[^\"]+\"|'[^']+'|[^\s]+)"
 )
 WINDOWS_COMMAND_SOFT_LIMIT = 7000
+COMPACT_CHANGED_FILE_SAMPLE_LIMIT = 3
+COMPACT_CATEGORY_SAMPLE_LIMIT = 8
+COMPACT_COMMAND_CHAR_LIMIT = 360
 
 
 @dataclass(frozen=True)
@@ -91,10 +94,23 @@ class CommandResult:
         if self.status != "pass":
             row["stdout_tail"] = _tail(self.stdout)
             row["stderr_tail"] = _tail(self.stderr)
-        return row
+        return _compact_command_text(row)
 
     def full(self) -> dict[str, Any]:
-        row = self.compact()
+        metadata = dict(self.metadata or {})
+        row: dict[str, Any] = {
+            "command": self.command,
+            "scope": self.scope,
+            "status": self.status,
+            "returncode": self.returncode,
+            "elapsed_ms": self.elapsed_ms,
+        }
+        for key in COMMAND_METADATA_KEYS:
+            if key in metadata:
+                row[key] = metadata[key]
+        if self.status != "pass":
+            row["stdout_tail"] = _tail(self.stdout)
+            row["stderr_tail"] = _tail(self.stderr)
         row["stdout"] = self.stdout
         row["stderr"] = self.stderr
         return row
@@ -107,6 +123,17 @@ def _tail(text: str, *, max_lines: int = 24, max_chars: int = 4000) -> str:
     lines = cleaned.splitlines()[-max_lines:]
     tail = "\n".join(lines)
     return tail[-max_chars:]
+
+
+def _compact_command_text(row: dict[str, Any]) -> dict[str, Any]:
+    command = str(row.get("command") or "")
+    if len(command) <= COMPACT_COMMAND_CHAR_LIMIT:
+        return row
+    compact = dict(row)
+    compact.pop("command", None)
+    compact["command_preview"] = command[:COMPACT_COMMAND_CHAR_LIMIT].rstrip()
+    compact["command_truncated"] = True
+    return compact
 
 
 def _scope_rank(scope: str) -> int:
@@ -492,6 +519,22 @@ def _compact_verification_cost(report: Mapping[str, Any]) -> dict[str, Any]:
     return row
 
 
+def _compact_changed_surface(
+    report: Mapping[str, Any],
+) -> dict[str, Any]:
+    changed_files = list(report.get("changed_files") or [])
+    affected_files = changed_files[:COMPACT_CHANGED_FILE_SAMPLE_LIMIT]
+    categories = list(report.get("plan_categories") or [])
+    category_summary = [str(item) for item in categories[:COMPACT_CATEGORY_SAMPLE_LIMIT]]
+    return {
+        "changed_file_count": report.get("changed_file_count"),
+        "affected_files": affected_files,
+        "affected_files_truncated": len(changed_files) > len(affected_files),
+        "category_summary": category_summary,
+        "category_summary_truncated": len(categories) > len(category_summary),
+    }
+
+
 def _compact_preflight_report(report: Mapping[str, Any]) -> dict[str, Any]:
     compact = {
         "kind": report.get("kind"),
@@ -505,7 +548,7 @@ def _compact_preflight_report(report: Mapping[str, Any]) -> dict[str, Any]:
         "owner_doc": report.get("owner_doc"),
         "mode": report.get("mode"),
         "changed_file_count": report.get("changed_file_count"),
-        "affected_files": list(report.get("changed_files") or [])[:3],
+        "changed_surface": _compact_changed_surface(report),
         "planned_command_count": report.get("planned_command_count"),
         "mode_runnable_command_count": report.get("mode_runnable_command_count"),
         "ran_command_count": report.get("ran_command_count"),
@@ -676,6 +719,7 @@ def run_preflight(
             base=base,
             local_executable=local_executable,
             mode=selected_mode,
+            changed_files_from_base=not caller_supplied_changed_files,
             pr_number=effective_pr or pr_number,
             github_repo=github_repo,
         ),
@@ -684,6 +728,7 @@ def run_preflight(
             base=base,
             local_executable=local_executable,
             mode="closeout",
+            changed_files_from_base=not caller_supplied_changed_files,
             pr_number=effective_pr or pr_number,
             github_repo=github_repo,
         ),
@@ -691,6 +736,7 @@ def run_preflight(
             normalized_changed,
             base=base,
             local_executable=local_executable,
+            changed_files_from_base=not caller_supplied_changed_files,
         ),
         "plan_categories": plan.get("categories") or [],
     }
@@ -783,6 +829,7 @@ def _detail_command(
     base: str,
     local_executable: bool,
     mode: str,
+    changed_files_from_base: bool = False,
     pr_number: str | None = None,
     github_repo: str | None = None,
 ) -> str:
@@ -795,7 +842,7 @@ def _detail_command(
         parts.extend(["--github-repo", shell_arg(github_repo)])
     if local_executable:
         parts.append("--local-executable")
-    if changed_files:
+    if changed_files and not changed_files_from_base:
         parts.append(_changed_file_args_text(changed_files))
     else:
         parts.append(f"--base {shell_arg(base)}")
@@ -811,11 +858,12 @@ def _planner_detail_command(
     *,
     base: str,
     local_executable: bool,
+    changed_files_from_base: bool = False,
 ) -> str:
     parts = ["--json", "--detail full"]
     if local_executable:
         parts.append("--local-executable")
-    if changed_files:
+    if changed_files and not changed_files_from_base:
         parts.append(_changed_file_args_text(changed_files))
     else:
         parts.append(f"--base {shell_arg(base)}")
