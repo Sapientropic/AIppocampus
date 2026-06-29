@@ -96,7 +96,7 @@ jobs:
           aippocampus update status --json | tee .tmp/macos-install-smoke/update-status.json
           aippocampus mcp list-tools | tee .tmp/macos-install-smoke/mcp-tools-via-cli.json
           PYTHONPATH="$CODEX_HOME/skills/aippocampus/scripts" \
-            python -m aippocampus_runtime.mcp.server --list-tools \
+            python -m aippocampus_runtime.cli.facade mcp list-tools \
             | tee .tmp/macos-install-smoke/mcp-tools-via-staged-skill.json
 
       - name: Run focused deterministic repo smoke

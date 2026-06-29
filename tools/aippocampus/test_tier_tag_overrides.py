@@ -82,6 +82,7 @@ TAG_OVERRIDES = {
     "test_sync_bundle": ("sync", "filesystem"),
     "test_update_agent_status": ("install", "packaging"),
     "test_update_foreground_actions": ("install", "hook", "packaging"),
+    "test_update_mcp_launch": ("install", "mcp", "packaging"),
     "test_update_sync": ("install", "filesystem", "hook", "packaging"),
     "test_uninstall_inventory": ("filesystem", "install", "privacy"),
     "test_wheel_contract_release": ("release", "packaging"),

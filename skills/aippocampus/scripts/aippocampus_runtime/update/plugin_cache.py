@@ -14,6 +14,10 @@ from typing import Any
 from aippocampus_runtime.io_integrity import prepared_directory_replace
 from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.update import status_actions
+from aippocampus_runtime.update.mcp_launch import (
+    command_name,
+    is_current_installed_python_mcp_launch,
+)
 
 PLUGIN_NAME = "aippocampus"
 MARKETPLACE_NAME = "aippocampus-local"
@@ -84,16 +88,7 @@ def _mcp_server_python_module_launch_current(server: Mapping[str, Any] | None) -
         return False
     command = str(server.get("command") or "")
     args = [str(item) for item in server.get("args") or []]
-    command_name = Path(command).name.casefold()
-    if command_name in {"aippocampus", "aippocampus.exe"}:
-        return False
-    if len(args) >= 2 and args[0] == "-m":
-        module_name = args[1]
-        if module_name == "aippocampus_runtime.cli.facade":
-            return len(args) >= 3 and args[2] == "mcp"
-        if module_name == "aippocampus_runtime.mcp.server":
-            return True
-    return False
+    return is_current_installed_python_mcp_launch(command, args)
 
 
 def _current_mcp_server_config(server: Mapping[str, Any] | None) -> bool:
@@ -103,8 +98,8 @@ def _current_mcp_server_config(server: Mapping[str, Any] | None) -> bool:
 
 
 def _mcp_launch_kind(command: str, args: list[str]) -> str:
-    command_name = Path(command).name.casefold()
-    if command_name in {"aippocampus", "aippocampus.exe"}:
+    name = command_name(command)
+    if name in {"aippocampus", "aippocampus.exe"}:
         return "console_script"
     if len(args) >= 2 and args[0] == "-m":
         return "python_module"

@@ -256,7 +256,7 @@ class UpdateSyncTests(unittest.TestCase):
                         "mcpServers": {
                             "aippocampus": {
                                 "command": "python-definitely-missing-for-aippocampus-test",
-                                "args": ["-m", "aippocampus_runtime.mcp.server"],
+                                "args": ["-m", "aippocampus_runtime.cli.facade", "mcp"],
                             }
                         }
                     }
@@ -280,6 +280,11 @@ class UpdateSyncTests(unittest.TestCase):
         agent = payload["surfaces"]["agent_callable"]
         self.assertEqual(mcp["status"], "current")
         self.assertTrue(mcp["package_artifact_current"])
+        self.assertTrue(mcp["current_module_entrypoint"])
+        self.assertEqual(
+            mcp["portable_module_command"],
+            f"{Path(sys.executable).name} -m aippocampus_runtime.cli.facade mcp",
+        )
         self.assertFalse(mcp["mcp_command_resolves"])
         self.assertEqual(agent["status"], "artifact_current_host_not_exposed")
         self.assertFalse(agent["ready"])
@@ -1881,7 +1886,7 @@ class UpdateSyncTests(unittest.TestCase):
                         "mcpServers": {
                             "aippocampus": {
                                 "command": "python",
-                                "args": ["-m", "aippocampus_runtime.mcp.server"],
+                                "args": ["-m", "aippocampus_runtime.cli.facade", "mcp"],
                             }
                         }
                     }
@@ -1956,7 +1961,7 @@ class UpdateSyncTests(unittest.TestCase):
             applied = payload["applied_surfaces"][0]
             self.assertTrue(applied["ok"])
             self.assertTrue(applied["cache_refresh"]["requested"])
-            self.assertTrue(
+            self.assertFalse(
                 applied["cache_refresh"]["refreshed"]["installed_cache"][
                     "portable_mcp_config_preserved"
                 ]

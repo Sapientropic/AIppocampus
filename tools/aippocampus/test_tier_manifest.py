@@ -497,6 +497,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_topology_anchor_policy",
         "test_update_agent_status",
         "test_update_foreground_actions",
+        "test_update_mcp_launch",
         "test_update_sync",
         "test_uninstall_inventory",
         "test_vault_dashboard_assets",
