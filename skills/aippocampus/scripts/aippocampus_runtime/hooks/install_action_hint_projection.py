@@ -400,7 +400,8 @@ def redact_public_result(result: Mapping[str, Any], *, path: Path) -> dict[str, 
 
 def public_install_result(result: Mapping[str, Any], *, path: Path) -> dict[str, Any]:
     public = redact_public_result(result, path=path)
-    frontstage = public.get("frontstage_card") if isinstance(public.get("frontstage_card"), Mapping) else {}
+    raw_frontstage = public.get("frontstage_card")
+    frontstage = raw_frontstage if isinstance(raw_frontstage, Mapping) else {}
     useful = bool(frontstage.get("useful"))
     active = bool(frontstage.get("hot_path_active"))
     primary = (

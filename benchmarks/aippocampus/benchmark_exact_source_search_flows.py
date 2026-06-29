@@ -184,6 +184,11 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
             registry_dir=root,
             record_last_search=True,
         )
+        registry_hit_detail = search_registry_sources(
+            ["cross-thread exact search fixture phrase"],
+            registry_dir=root,
+            detail="full",
+        )
         registry_reopen = open_registry_source_window(
             registry_dir=root,
             hit_index=1,
@@ -198,6 +203,7 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
         registry_miss = search_registry_sources(
             ["zqxj-unmatched-registry-needle"],
             registry_dir=root,
+            detail="full",
         )
         last_recall_hit = search_last_recall_sources(
             ["last-recall exact search fixture phrase"],
@@ -216,6 +222,7 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
         )
         payloads = [
             registry_hit,
+            registry_hit_detail,
             registry_reopen,
             registry_duplicate_reopen,
             registry_miss,
@@ -223,7 +230,7 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
             last_recall_miss,
             stale_last_recall,
         ]
-        duplicate_refs = registry_hit["matches"][0].get("duplicate_source_refs") or []
+        duplicate_refs = registry_hit_detail["matches"][0].get("duplicate_source_refs") or []
         target_in_duplicate_refs = any(
             isinstance(ref, dict)
             and ref.get("thread_key") == "session:registry-duplicate"
@@ -236,9 +243,11 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
                 "case_id": "registry_wide_cross_thread_hit",
                 "ok": bool(registry_hit.get("ok"))
                 and registry_hit.get("match_count") >= 1
-                and registry_hit["matches"][0]["thread"]["thread_key"] == "session:registry",
+                and registry_hit["foreground_action"]["arguments"]["thread_key"] == "session:registry",
                 "scope": registry_hit.get("search_scope"),
-                "reopenable": bool(registry_hit["matches"][0].get("reopen_command")),
+                "reopenable": bool(
+                    registry_hit.get("foreground_action", {}).get("arguments", {}).get("open_source")
+                ),
             },
             {
                 "case_id": "registry_wide_hit_reopens_source_window",

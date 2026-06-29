@@ -1805,15 +1805,12 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(zero.returncode, 0, zero.stderr)
         zero_payload = parse_cli_json(self, zero)
-        self.assertEqual(zero_payload["matches"][0]["snippet"], "")
+        self.assertEqual(zero_payload["matches"][0].get("snippet", ""), "")
         self.assertTrue(zero_payload["matches"][0]["snippet_omitted"])
         self.assertEqual(public.returncode, 0, public.stderr)
         public_payload = parse_cli_json(self, public)
         encoded_public = json.dumps(public_payload, ensure_ascii=False)
-        self.assertEqual(
-            public_payload["output_boundary"],
-            "public_metadata_with_capped_source_snippets_no_reopen_refs",
-        )
+        self.assertNotIn("output_boundary", public_payload)
         self.assertTrue(public_payload["privacy"]["metadata_only"])
         self.assertTrue(public_payload["matches"][0]["snippet"])
         self.assertLessEqual(len(public_payload["matches"][0]["snippet"]), 260)
@@ -1845,11 +1842,12 @@ class AippocampusCliTests(unittest.TestCase):
             'aippocampus agent recall "{cue}" --json',
         )
         self.assertNotIn("recovery_actions", no_match_payload)
-        self.assertEqual(no_match_payload["claim_boundary"], "no_claim_before_source_match")
-        self.assertEqual(
-            no_match_payload["source_reopen_boundary"],
-            "search_miss_is_not_absence_of_memory",
-        )
+        self.assertEqual(no_match_payload["foreground_action"]["id"], "refine_or_recall")
+        self.assertEqual(no_match_payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertNotIn("source_boundary", no_match_payload)
+        encoded_no_match = json.dumps(no_match_payload, ensure_ascii=False)
+        self.assertNotIn("claim_boundary", encoded_no_match)
+        self.assertNotIn("source_reopen_boundary", encoded_no_match)
 
     def test_warm_status_json_is_bounded_and_path_redacted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

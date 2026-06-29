@@ -344,14 +344,14 @@ def apply_semantic_effectiveness_to_candidates(
     """
 
     rows_by_candidate: dict[tuple[str, str], list[Mapping[str, Any]]] = defaultdict(list)
-    for row in ledger_rows:
-        if not isinstance(row, Mapping) or row.get("kind") != ROW_KIND:
+    for ledger_row in ledger_rows:
+        if not isinstance(ledger_row, Mapping) or ledger_row.get("kind") != ROW_KIND:
             continue
-        candidate_id = _event_candidate_id(row)
-        bucket = _bucket(row.get("scope_bucket") or row.get("privacy_partition"))
+        candidate_id = _event_candidate_id(ledger_row)
+        bucket = _bucket(ledger_row.get("scope_bucket") or ledger_row.get("privacy_partition"))
         if candidate_id:
-            rows_by_candidate[(bucket, candidate_id)].append(row)
-    aggregates = {
+            rows_by_candidate[(bucket, candidate_id)].append(ledger_row)
+    aggregates: dict[tuple[str, str], dict[str, Any]] = {
         key: _aggregate_semantic_effectiveness_rows(rows, bucket=key[0])
         for key, rows in rows_by_candidate.items()
     }

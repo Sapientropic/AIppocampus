@@ -733,7 +733,7 @@ class LastRecallSourceSearchTests(unittest.TestCase):
         self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(foreground_action_contract_violations(payload), [])
 
-    def test_registry_backed_recall_to_deepen_smoke_uses_fresh_last_recall_cache(self) -> None:
+    def test_registry_backed_recall_emits_search_open_action_without_stale_cache(self) -> None:
         registry_clean = self.cwd / "registry-smoke" / "clean-source"
         self._write_messages(
             registry_clean,
@@ -784,42 +784,41 @@ class LastRecallSourceSearchTests(unittest.TestCase):
             )
         recall_payload = json.loads(recall_stdout.getvalue())
 
-        deepen_stdout = io.StringIO()
-        with contextlib.redirect_stdout(deepen_stdout):
-            deepen_code = agent_continuity.main(
-                [
-                    "deepen",
-                    "--request",
-                    "1",
-                    "--last-recall",
-                    "--last-recall-path",
-                    str(cache_path),
-                    "--cwd",
-                    str(self.cwd),
-                    "--clean-source-dir",
-                    str(self.clean),
-                    "--registry-dir",
-                    str(self.cwd),
-                    "--json",
-                    "--detail",
-                    "full",
-                ]
-            )
-        deepen_payload = json.loads(deepen_stdout.getvalue())
-
         self.assertEqual(recall_code, 0)
-        self.assertTrue(cache_path.exists())
+        self.assertFalse(cache_path.exists())
         self.assertNotIn("last_recall_cache_available", recall_payload)
         self.assertNotIn("route_count", recall_payload)
         self.assertGreaterEqual(len(recall_payload["routes"]), 1)
-        self.assertEqual(recall_payload["routes"][0]["label"], "Registry source route")
-        self.assertIn("agent deepen --request 1", recall_payload["foreground_action"]["command"])
-        self.assertEqual(deepen_code, 0)
-        self.assertEqual(deepen_payload["result"]["status"], "ok")
-        self.assertTrue(deepen_payload["result"]["metrics"]["source_reopen_success"])
+        self.assertEqual(
+            recall_payload["foreground_action"]["id"],
+            "search_registry_sources_for_original_cue_anchors",
+        )
+        from aippocampus_runtime.source.registry_search import (
+            open_registry_source_window,
+            search_registry_sources,
+        )
+
+        search_payload = search_registry_sources(
+            [recall_payload["foreground_action"]["arguments"]["query"]],
+            registry_dir=self.cwd,
+            cwd=self.cwd,
+            record_last_search=True,
+        )
+        self.assertEqual(
+            search_payload["foreground_action"]["id"],
+            "open_registry_search_source_window",
+        )
+        opened = open_registry_source_window(
+            registry_dir=self.cwd,
+            thread_key=search_payload["foreground_action"]["arguments"]["thread_key"],
+            message_id=search_payload["foreground_action"]["arguments"]["message_id"],
+            line=search_payload["foreground_action"]["arguments"]["line"],
+        )
+        self.assertEqual(opened["status"], "ok")
+        self.assertTrue(opened["metrics"]["source_reopen_success"])
         self.assertIn(
             "registry-backed recall deepen smoke phrase",
-            json.dumps(deepen_payload["result"]["source_window"], ensure_ascii=False),
+            json.dumps(opened["source_window"], ensure_ascii=False),
         )
 
 if __name__ == "__main__":
