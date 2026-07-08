@@ -1068,6 +1068,22 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertNotIn("coverage-${{ matrix.python-version }}", workflow)
         self.assertNotIn("python benchmarks/aippocampus/benchmark_suite.py", workflow)
 
+    def test_manual_full_tier_does_not_emit_skipped_pr_check(self) -> None:
+        pr_workflow = (REPO_ROOT / ".github" / "workflows" / "aippocampus-ci.yml").read_text(
+            encoding="utf-8",
+        )
+        full_workflow = (REPO_ROOT / ".github" / "workflows" / "full-tests.yml").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertNotIn("github.event_name == 'workflow_dispatch'", pr_workflow)
+        self.assertNotIn("github.event_name == \"workflow_dispatch\"", pr_workflow)
+        self.assertNotIn("full-tests:", pr_workflow)
+        self.assertIn("workflow_dispatch:", full_workflow)
+        self.assertNotIn("pull_request:", full_workflow)
+        self.assertIn("full-tests:", full_workflow)
+        self.assertIn("--tier full", full_workflow)
+
     def test_quick_and_pr_count_budgets_report_drift_without_hard_gating(self) -> None:
         for tier in ("quick", "pr"):
             modules = run_tests.modules_for_tier(tier)
