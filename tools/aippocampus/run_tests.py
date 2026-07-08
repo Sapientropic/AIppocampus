@@ -107,25 +107,27 @@ PR_BUDGET: TierCountBudget = {
 BROAD_SUITE_REVIEW_TARGETS: dict[str, BroadSuiteReviewTarget] = {
     "broad-pr": {
         "module_count_review_threshold": 380,
-        "test_count_review_threshold": 3400,
+        "test_count_review_threshold": 3600,
         "label": "Broad PR",
         "review_owner": "verification-steward",
         "review_decision_date": "2026-07-08",
         "review_rationale": (
             "Accepted as a CI/pre-merge breadth lane, not an ordinary local "
-            "agent ritual; changed-surface planning must still name focused "
-            "commands before escalating here."
+            "agent ritual; the current PR-head catalog has been re-counted with "
+            "reviewer-observed generated test cases included, and changed-surface "
+            "planning must still name focused commands before escalating here."
         ),
     },
     "full": {
         "module_count_review_threshold": 460,
-        "test_count_review_threshold": 4200,
+        "test_count_review_threshold": 4400,
         "label": "Full",
         "review_owner": "verification-steward",
         "review_decision_date": "2026-07-08",
         "review_rationale": (
             "Accepted as the complete catalog/release audit lane after recent "
-            "coverage growth; it remains deferred from default local closeout."
+            "coverage growth and reviewer-observed PR-head recounts; it remains "
+            "deferred from default local closeout."
         ),
     },
 }

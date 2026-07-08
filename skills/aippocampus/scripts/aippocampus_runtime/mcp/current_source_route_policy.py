@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime.recall import associative_path_foreground_gate as apw_gate
+from aippocampus_runtime.source.io_kernel import source_ref_identity_key
 from aippocampus_runtime.source.query_match_gate import query_match_gate
 
 
@@ -56,10 +57,26 @@ def _route_note_like(packet: Mapping[str, Any]) -> bool:
 def _route_note_has_joined_source_ref(packet: Mapping[str, Any]) -> bool:
     for key in ("joined_evidence_refs", "source_refs"):
         value = packet.get(key)
-        if isinstance(value, list) and any(isinstance(item, Mapping) for item in value):
+        if isinstance(value, list) and any(_route_note_ref_reopenable(item) for item in value):
             return True
     source_ref = packet.get("source_ref")
-    return isinstance(source_ref, Mapping) and bool(source_ref.get("message_id"))
+    return _source_ref_reopenable(source_ref)
+
+
+def _route_note_ref_reopenable(value: Any) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    nested = value.get("source_ref")
+    if _source_ref_reopenable(nested):
+        return True
+    return _source_ref_reopenable(value)
+
+
+def _source_ref_reopenable(value: Any) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    source_id, thread_key, message_id, turn_id, line = source_ref_identity_key(value)
+    return bool((source_id or thread_key) and (message_id or turn_id or line))
 
 
 def apw_card_allows_primary(

@@ -322,6 +322,27 @@ class RunTestsTierTests(unittest.TestCase):
             )
         )
 
+    def test_broad_suite_thresholds_cover_current_pr_head_catalog(self) -> None:
+        broad_pr = run_tests.suite_growth_review_for_tier(
+            "broad-pr",
+            module_count=372,
+            test_count=3508,
+            top_modules=[],
+        )
+        full = run_tests.suite_growth_review_for_tier(
+            "full",
+            module_count=456,
+            test_count=4314,
+            top_modules=[],
+        )
+
+        self.assertIsNotNone(broad_pr)
+        self.assertIsNotNone(full)
+        assert broad_pr is not None
+        assert full is not None
+        self.assertEqual(broad_pr["status"], "within_review_threshold")
+        self.assertEqual(full["status"], "within_review_threshold")
+
     def test_report_json_cli_prints_compact_report_without_running_tests(self) -> None:
         report = {
             "kind": "aippocampus_test_tier_report",

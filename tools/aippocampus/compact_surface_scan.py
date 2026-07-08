@@ -16,6 +16,7 @@ import os
 import shlex
 import signal
 import subprocess
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -141,8 +142,22 @@ def _command_surface(command: str | Sequence[str]) -> str:
 
 def _command_argv(command: str | Sequence[str]) -> list[str]:
     if isinstance(command, str):
-        return shlex.split(command)
-    return [str(item) for item in command]
+        raw = shlex.split(command)
+    else:
+        raw = [str(item) for item in command]
+    if raw and raw[0] == "aippocampus":
+        return [sys.executable, "-m", "aippocampus_runtime.cli.facade", *raw[1:]]
+    return raw
+
+
+def _subprocess_env() -> dict[str, str]:
+    env = dict(os.environ)
+    existing = env.get("PYTHONPATH")
+    parts = [str(PATHS.skill_scripts)]
+    if existing:
+        parts.append(existing)
+    env["PYTHONPATH"] = os.pathsep.join(parts)
+    return env
 
 
 def _terminate_process_tree(proc: subprocess.Popen[str]) -> None:
@@ -188,6 +203,7 @@ def scan_cli_command(
     argv = _command_argv(command)
     started_at = perf_counter()
     if timeout_seconds <= 0:
+        clamped_timeout_seconds = max(0.0, timeout_seconds)
         return {
             "surface": surface,
             "kind": "cli",
@@ -195,7 +211,7 @@ def scan_cli_command(
             "ok": False,
             "exit_code": None,
             "elapsed_ms": 0.0,
-            "timeout_seconds": timeout_seconds,
+            "timeout_seconds": clamped_timeout_seconds,
             "error": "scan_budget_exhausted",
             "stderr_preview": "",
         }
@@ -206,6 +222,7 @@ def scan_cli_command(
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=_subprocess_env(),
             **_popen_kwargs(),
         )
     except OSError as exc:
@@ -412,7 +429,7 @@ def run_scan(
     checks: list[dict[str, Any]] = []
     if include_cli:
         for probe in CLI_PROBES:
-            remaining_seconds = scan_deadline - perf_counter()
+            remaining_seconds = max(0.0, scan_deadline - perf_counter())
             timeout_seconds = min(probe.timeout_seconds, probe_timeout_seconds, remaining_seconds)
             checks.append(
                 scan_cli_command(
