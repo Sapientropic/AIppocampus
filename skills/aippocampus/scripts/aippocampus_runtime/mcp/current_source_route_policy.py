@@ -23,6 +23,45 @@ def primary_current_source_reopenable(memory_packets: list[dict[str, Any]]) -> b
     )
 
 
+def primary_deepen_followthrough_reopenable(memory_packets: list[dict[str, Any]]) -> bool:
+    """Return whether the primary route is safe to expose as agent_deepen.
+
+    Low-specificity recall sometimes surfaces route-note navigation scents. A
+    route note is useful orientation, but it should not become the first
+    foreground `agent_deepen` action unless it carries joined clean-source
+    evidence that `agent_deepen` can reopen.
+    """
+
+    if not memory_packets:
+        return False
+    primary = memory_packets[0]
+    if primary.get("output_mode") != "reopenable_route":
+        return False
+    if not _route_note_like(primary):
+        return True
+    return _route_note_has_joined_source_ref(primary)
+
+
+def _route_note_like(packet: Mapping[str, Any]) -> bool:
+    markers = {
+        str(packet.get("route_kind") or ""),
+        str(packet.get("matched_cue_family") or ""),
+        str(packet.get("origin") or ""),
+        str(packet.get("route_origin") or ""),
+        str(packet.get("source") or ""),
+    }
+    return any("route_note" in marker.casefold() for marker in markers)
+
+
+def _route_note_has_joined_source_ref(packet: Mapping[str, Any]) -> bool:
+    for key in ("joined_evidence_refs", "source_refs"):
+        value = packet.get(key)
+        if isinstance(value, list) and any(isinstance(item, Mapping) for item in value):
+            return True
+    source_ref = packet.get("source_ref")
+    return isinstance(source_ref, Mapping) and bool(source_ref.get("message_id"))
+
+
 def apw_card_allows_primary(
     *,
     should_replace: bool,

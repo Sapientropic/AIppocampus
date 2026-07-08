@@ -97,6 +97,30 @@ class AippocampusMcpServerSearchMemoryTests(unittest.TestCase):
         self.assertNotIn("source_window", open_payload)
         self.assertNotIn(str(self.cwd), json.dumps(open_payload, ensure_ascii=False))
 
+    def test_search_memory_accepts_common_schema_args_without_handler_mismatch(self) -> None:
+        anchor = "MCP schema handler detail compatibility anchor"
+        self._write_registry_thread(anchor=anchor)
+
+        payload = call_mcp_tool_payload(
+            "search_memory",
+            {
+                "query": anchor,
+                "scope": "all_registered_sources",
+                "registry_dir": str(self.cwd),
+                "cwd": str(self.cwd),
+                "detail": "compact",
+                "search_budget": "deep",
+                "max_elapsed_ms": 15000,
+                "max": 5,
+            },
+        )
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(payload["kind"], "aippocampus_registry_source_search")
+        self.assertEqual(payload["mcp_search_scope"], "all_registered_sources")
+        self.assertNotIn("unexpected keyword argument", encoded)
+        self.assertNotIn("TypeError", encoded)
+
     def test_search_memory_near_hit_candidate_opens_source_as_navigation(self) -> None:
         query = "隐私保护 到底 要到什么程度"
         source_text = "隐私保护 到底 要帮用户继续，而不是变成隐私阻断器。"

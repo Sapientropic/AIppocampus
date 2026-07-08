@@ -259,13 +259,15 @@ class RunTestsTierTests(unittest.TestCase):
             ],
         )
         self.assertEqual(report["tier_aliases"], {})
-        self.assertEqual(report["tiers"]["quick"]["budget"]["module_count_target"], 46)
+        self.assertEqual(report["tiers"]["quick"]["budget"]["module_count_target"], 50)
         self.assertEqual(report["tiers"]["quick"]["budget"]["test_count_target"], 330)
         self.assertEqual(report["tiers"]["quick"]["budget"]["module_count_status"], "within_target")
         self.assertEqual(report["tiers"]["quick"]["budget"]["test_count_status"], "within_target")
-        self.assertEqual(report["tiers"]["pr"]["budget"]["module_count_target"], 70)
+        self.assertEqual(report["tiers"]["pr"]["budget"]["module_count_target"], 86)
         self.assertEqual(report["tiers"]["pr"]["budget"]["test_count_target"], 500)
         self.assertEqual(report["tiers"]["pr"]["budget"]["budget_outcome"], "within_target")
+        self.assertEqual(report["tiers"]["pr"]["budget"]["target_updated_at"], "2026-07-08")
+        self.assertIn("replacement lanes", report["tiers"]["pr"]["budget"]["replacement_lane_note"])
         self.assertIsNone(report["tiers"]["pr"]["budget"]["recommended_action"])
         self.assertTrue(
             any(
@@ -277,7 +279,7 @@ class RunTestsTierTests(unittest.TestCase):
     def test_count_budget_surfaces_actionable_drift_without_hard_failing(self) -> None:
         budget = run_tests.count_budget_for_tier(
             "pr",
-            module_count=71,
+            module_count=87,
             test_count=501,
         )
 
@@ -295,8 +297,8 @@ class RunTestsTierTests(unittest.TestCase):
     def test_broad_suite_growth_review_is_non_gating_telemetry(self) -> None:
         review = run_tests.suite_growth_review_for_tier(
             "broad-pr",
-            module_count=331,
-            test_count=2957,
+            module_count=381,
+            test_count=3401,
             top_modules=[
                 {"module": "tests.aippocampus.test_docs_health", "test_count": 85}
             ],
@@ -307,6 +309,8 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(review["kind"], "non_gating_suite_growth_review")
         self.assertEqual(review["status"], "review_recommended")
         self.assertEqual(review["recommended_action"]["mutation_risk"], "planning_only")
+        self.assertEqual(review["review_decision_date"], "2026-07-08")
+        self.assertIn("CI/pre-merge", review["review_rationale"])
         self.assertIn("must not make broad coverage", review["recommended_action"]["why"])
         self.assertIn("Non-gating", review["boundary"])
         self.assertIsNone(
@@ -403,11 +407,11 @@ class RunTestsTierTests(unittest.TestCase):
             "generated_at": "2026-06-29T15:00:00Z",
             "tiers": {
                 "pr": {
-                    "module_count": 71,
+                    "module_count": 87,
                     "test_count": 501,
                     "budget": run_tests.count_budget_for_tier(
                         "pr",
-                        module_count=71,
+                        module_count=87,
                         test_count=501,
                     ),
                     "growth_review": None,

@@ -351,6 +351,58 @@ def _select_initial_foreground_action(
             foreground_action,
             context.recall_selector,
         )
+        if not current_source_route_policy.primary_deepen_followthrough_reopenable(
+            context.memory_packets,
+        ):
+            registry_fallback = recall_choices.registry_source_search_fallback_action(
+                context.recovery_cue
+            )
+            if registry_fallback:
+                registry_fallback["route_choice_posture"] = "route_note_requires_source_search"
+                registry_fallback["why"] = (
+                    "The top recall route is route-note navigation without a "
+                    "reopenable clean-source handle; search registered sources for "
+                    "the original cue anchors before deepening or claiming."
+                )
+                foreground_action = registry_fallback
+                safe_next_actions = [
+                    {
+                        "id": "refine_low_specificity_recall_cue",
+                        "label": "Refine low-specificity recall cue",
+                        "tool_name": "agent_recall",
+                        "arguments_template": {"query": "{tighter_cue}", "max": 3},
+                        "requires": ["tighter_cue"],
+                        "template_only": True,
+                        "command_template": 'aippocampus agent recall "{tighter_cue}" --json',
+                        "route_choice_posture": "route_note_requires_source_search",
+                        "mutation_risk": "read_only",
+                        "claim_boundary": "no_claim_before_reopen",
+                        "why": (
+                            "If source search does not find the right anchor, "
+                            "tighten the cue with a more specific phrase, object, "
+                            "person, or time clue."
+                        ),
+                    }
+                ]
+            else:
+                weak_route_recovery_card = _weak_route_recovery_card()
+                foreground_action = {
+                    "action_id": "recover_route_note_without_source_ref",
+                    "label": "Recover route-note recall",
+                    "tool_name": "search_memory",
+                    "why": (
+                        "The top route-note candidate has no reopenable source "
+                        "handle; provide a more specific cue before relying on it."
+                    ),
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "no_claim_before_reopen",
+                } | context.search_fields
+            return ForegroundSelection(
+                foreground_action=foreground_action,
+                miss_recovery_card=miss_recovery_card,
+                weak_route_recovery_card=weak_route_recovery_card,
+                safe_next_actions=safe_next_actions,
+            )
         foreground_action = recall_choices.with_low_specificity_foreground_action(
             foreground_action,
             metrics=context.metrics,

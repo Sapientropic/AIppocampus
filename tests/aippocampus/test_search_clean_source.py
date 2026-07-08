@@ -1786,7 +1786,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertNotIn("suppressed_low_coverage_matches", payload)
         self.assertNotIn("source_boundary", payload)
         self.assertNotIn("privacy", payload)
-        self.assertEqual(payload["suppression_boundary"], "phrase_like_low_coverage_suppressed")
+        self.assertNotIn("suppression_boundary", payload)
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
 

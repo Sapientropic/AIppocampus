@@ -7,6 +7,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
+from aippocampus_runtime.foreground_compact_language import compact_frontstage_projection
 from aippocampus_runtime.ops.storage_governance_actions import (
     candidate_can_offer_compact_apply,
     storage_gc_summary_actions,
@@ -295,6 +296,8 @@ def bounded_cli_projection(
         action_fields = canonical_foreground_action_fields(
             summary_actions[0],
             safe_next_actions=summary_actions,
+            max_safe_next_actions=1,
+            safe_next_read_only_only=True,
         )
         next_steps = [
             "Continue normal work when cleanup was not the user goal.",
@@ -392,6 +395,19 @@ def bounded_cli_projection(
             canonical_foreground_action_fields(
                 primary,
                 safe_next_actions=[primary, *existing_actions],
+                max_safe_next_actions=1,
+                safe_next_read_only_only=True,
             )
         )
-    return projection
+    projection["details_available"] = True
+    return compact_frontstage_projection(
+        projection,
+        extra_denied_keys={
+            "comparable_metrics_command",
+            "full_audit_available",
+            "full_audit_flag",
+            "operator_audit_command",
+            "policy_model",
+            "report_sources",
+        },
+    )

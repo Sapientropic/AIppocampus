@@ -289,6 +289,55 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("C:\\", encoded)
         assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=1)
 
+    def test_route_note_only_low_specificity_route_uses_source_search_not_blind_deepen(self) -> None:
+        public = agent_continuity_cli_support.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "last_recall_cache_available": True,
+                "recall_selector_id": "sel_route_note_only",
+                "foreground_action_card": {
+                    "decision": "use_route_first",
+                    "canonical_action": {
+                        "action_id": "agent_deepen_selected_route",
+                        "tool_name": "agent_deepen",
+                        "arguments": {"request_index": 1, "last_recall": True},
+                        "claim_boundary": "no_claim_before_reopen",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route_note_only",
+                        "route_label": "Low-specificity route",
+                        "route_kind": "route_note",
+                        "matched_cue_family": "route_note_title",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    }
+                ],
+                "metrics": {
+                    "memory_packet_count": 1,
+                    "deepen_request_count": 1,
+                    "route_label_specificity_floor": 0.0,
+                    "topic_label_present_count": 0,
+                },
+            },
+            query="之前 key persistence 那个模糊线索",
+        )
+
+        action = public["foreground_action"]
+        self.assertEqual(action["id"], "search_registry_sources_for_original_cue_anchors")
+        self.assertEqual(action["tool_name"], "search_memory")
+        self.assertEqual(action["arguments"]["scope"], "all_registered_sources")
+        self.assertIn("route-note navigation", action["why"])
+        self.assertEqual(
+            [item["id"] for item in public["safe_next_actions"]],
+            ["refine_low_specificity_recall_cue"],
+        )
+        self.assertNotIn("source_ref_not_found", json.dumps(public, ensure_ascii=False))
+
     def test_full_action_menu_is_foreground_compatible_without_detail_switch_claim(self) -> None:
         payload = {
             "kind": "aippocampus_agent_continuity_path",

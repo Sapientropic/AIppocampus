@@ -10,6 +10,7 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
 )
+from aippocampus_runtime.foreground_compact_language import compact_frontstage_projection
 from aippocampus_runtime.model.routing import DEFAULT_DEEPSEEK_API_KEY_ENV
 from aippocampus_runtime.ops.doctors.common import as_dict
 
@@ -146,11 +147,18 @@ def compact_provider_doctor_card(report: dict[str, Any]) -> dict[str, Any]:
             "frontstage_rule": "readiness and next check first; diagnostics stay in full detail",
         },
     }
-    return {
-        key: value
-        for key, value in card.items()
-        if value not in (None, "", [], {})
-    }
+    return compact_frontstage_projection(
+        {
+            key: value
+            for key, value in card.items()
+            if value not in (None, "", [], {})
+        },
+        extra_denied_keys={
+            "audit_json_available",
+            "boundary_summary",
+            "full_audit_command",
+        },
+    )
 
 
 def render_text(report: dict[str, Any]) -> str:

@@ -304,7 +304,9 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertNotIn("agent_next_action", payload)
         self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(payload["safe_next_actions"][0]["id"], "inspect_provider_doctor_detail")
-        self.assertEqual(payload["full_audit_command"], "aippocampus doctor provider --detail full --json")
+        self.assertTrue(payload["details_available"])
+        self.assertNotIn("full_audit_command", payload)
+        self.assertNotIn("operator_detail_command", payload)
         self.assertNotIn("recommended_actions", payload)
         self.assertIn("recommended_action_count", payload)
         self.assertNotIn("provider_env", payload)
@@ -312,7 +314,9 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertNotIn("credential_validation", payload)
         self.assertNotIn("boundary_detail", payload)
         self.assertNotIn("cannot_claim", payload)
-        self.assertIn("boundary_summary", payload)
+        self.assertNotIn("boundary_summary", payload)
+        self.assertNotIn("claim_boundary", payload["foreground_action"])
+        self.assertNotIn("claim_boundary", payload["safe_next_actions"][0])
         self.assertNotIn(fixture_value, proc.stdout)
 
     def test_cli_compact_json_missing_key_returns_guidance_card_without_failure(self) -> None:
@@ -400,6 +404,9 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertEqual(card["recommended_action_ids"], ["set_provider_env_in_hook_environment"])
         self.assertNotIn("provider_env", card)
         self.assertNotIn("legacy_aliases", card)
+        self.assertTrue(card["details_available"])
+        self.assertNotIn("operator_detail_command", card)
+        self.assertNotIn("claim_boundary", card["foreground_action"])
 
     def test_explicit_dotenv_discovery_reports_candidate_without_secret_or_path_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():

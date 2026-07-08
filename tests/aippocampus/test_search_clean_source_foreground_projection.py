@@ -113,5 +113,5 @@ class SearchCleanSourceForegroundProjectionTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["id"], "refine_or_recall")
         self.assertNotIn("source_boundary", payload)
         self.assertNotIn("recovery_actions", payload)
-        self.assertEqual(payload["suppression_boundary"], "phrase_like_low_coverage_suppressed")
+        self.assertNotIn("suppression_boundary", payload)
         self.assertEqual(foreground_action_contract_violations(payload), [])
