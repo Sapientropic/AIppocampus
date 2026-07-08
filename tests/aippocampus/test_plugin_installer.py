@@ -389,7 +389,10 @@ class PluginInstallerTests(unittest.TestCase):
 
                 self.assertTrue(result["ok"])
                 self.assertEqual(result["marketplace_source"], "configured_codex_marketplace")
-                self.assertEqual(Path(result["marketplace"]["root"]), configured_marketplace)
+                self.assertEqual(
+                    Path(result["marketplace"]["root"]).resolve(),
+                    configured_marketplace.resolve(),
+                )
                 self.assertTrue(
                     (
                         configured_marketplace
@@ -404,7 +407,7 @@ class PluginInstallerTests(unittest.TestCase):
                         "plugin",
                         "marketplace",
                         "add",
-                        str(configured_marketplace),
+                        str(configured_marketplace.resolve()),
                     ],
                     runner.command_tails,
                 )

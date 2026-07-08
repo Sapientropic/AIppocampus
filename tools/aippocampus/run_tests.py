@@ -51,7 +51,28 @@ DEFAULT_TIMING_ARTIFACTS: tuple[Path, ...] = ()
 TIER_REPORT_TOP_LIMIT = 10
 RUNNER_VERSION = "aippocampus-run-tests-v2"
 TIMINGS_SCHEMA_VERSION = 2
-QUICK_BUDGET = {
+
+
+class TierCountBudget(TypedDict):
+    module_count_target: int
+    test_count_target: int
+    elapsed_seconds_target: float
+    target_updated_at: str
+    target_owner: str
+    target_rationale: str
+    replacement_lane_note: str
+
+
+class BroadSuiteReviewTarget(TypedDict):
+    module_count_review_threshold: int
+    test_count_review_threshold: int
+    label: str
+    review_owner: str
+    review_decision_date: str
+    review_rationale: str
+
+
+QUICK_BUDGET: TierCountBudget = {
     "module_count_target": 50,
     "test_count_target": 330,
     "elapsed_seconds_target": 30.0,
@@ -67,7 +88,7 @@ QUICK_BUDGET = {
         "planner-named focused command with an owner note."
     ),
 }
-PR_BUDGET = {
+PR_BUDGET: TierCountBudget = {
     "module_count_target": 86,
     "test_count_target": 500,
     "elapsed_seconds_target": 180.0,
@@ -126,15 +147,6 @@ class ModuleTimingRow(TypedDict):
     test_count: int
     duration_seconds: float
     ok: bool
-
-
-class BroadSuiteReviewTarget(TypedDict):
-    module_count_review_threshold: int
-    test_count_review_threshold: int
-    label: str
-    review_owner: str
-    review_decision_date: str
-    review_rationale: str
 
 
 def _target_status(actual: int | float, target: int | float) -> str:

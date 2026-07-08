@@ -201,12 +201,13 @@ def render_current_source_window_text(
     result: Mapping[str, Any], *, snippet_chars: int
 ) -> str:
     if not result.get("ok"):
-        error = result.get("error") if isinstance(result.get("error"), Mapping) else {}
+        raw_error = result.get("error")
+        error_map: Mapping[str, Any] = raw_error if isinstance(raw_error, Mapping) else {}
         return "\n".join(
             [
                 "AIppocampus current-thread source window",
                 f"status: {result.get('status') or 'cannot_verify'}",
-                f"error: {error.get('code') or 'unknown'}",
+                f"error: {error_map.get('code') or 'unknown'}",
                 "boundary: rerun search for a fresh source-backed route before quoting.",
             ]
         )

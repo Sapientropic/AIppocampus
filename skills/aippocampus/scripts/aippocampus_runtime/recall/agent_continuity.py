@@ -8,6 +8,7 @@ packets stay compact; refs/support ledgers appear only after explicit deepen.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -753,6 +754,7 @@ def explain(
 
 
 def build_macro_orientation_packet_fixture_report() -> dict[str, Any]:
+    fixture_now = datetime(2026, 6, 12, tzinfo=timezone.utc)
     moving = macro_state.build_macro_orientation_state(
         project="AIppocampus",
         hexagram="乾",
@@ -769,10 +771,15 @@ def build_macro_orientation_packet_fixture_report() -> dict[str, Any]:
         updated_at="2026-06-11T11:00:00Z",
         active_layer="人",
     )
-    current = macro_state.latest_project_macro_orientation([moving], project="AIppocampus")
+    current = macro_state.latest_project_macro_orientation(
+        [moving],
+        project="AIppocampus",
+        now=fixture_now,
+    )
     standing_projection = macro_state.latest_project_macro_orientation(
         [standing],
         project="AIppocampus",
+        now=fixture_now,
     )
     packet = _macro_memory_packet(current, project="AIppocampus")
     standing_packet = _macro_memory_packet(standing_projection, project="AIppocampus")

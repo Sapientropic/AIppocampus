@@ -186,7 +186,7 @@ def module_exception_payload(
         else []
     )
     action = search_actions[0] if search_actions else script_recovery_action(script_name, args)
-    payload = (
+    payload: dict[str, Any] = (
         {
             "ok": False,
             "error": cli_error_object(
@@ -231,7 +231,8 @@ def module_exception_payload(
 
 
 def render_module_exception_text(payload: dict[str, Any]) -> str:
-    error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+    raw_error = payload.get("error")
+    error: Mapping[str, Any] = raw_error if isinstance(raw_error, Mapping) else {}
     action = payload.get("foreground_action")
     action_map = action if isinstance(action, Mapping) else {}
     lines = [
@@ -252,7 +253,8 @@ def handle_module_exception(
     stderr_text: str = "",
 ) -> int:
     payload = module_exception_payload(script_name, args, exc, stderr_text=stderr_text)
-    error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+    raw_error = payload.get("error")
+    error: Mapping[str, Any] = raw_error if isinstance(raw_error, Mapping) else {}
     exit_code = cli_exit_code_for_error_code(str(error.get("code") or "runtime_error"))
     if args_request_json(args):
         emit_public_text(json.dumps(payload, ensure_ascii=False, indent=2), end="")

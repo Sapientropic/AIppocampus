@@ -145,7 +145,7 @@ def _candidate_from_match(
         "candidate_id": f"registry-clean-source:{public_id}",
         "thread_key": _compact(thread_key, 120),
         "route_terms": route_terms,
-        "query_anchor_terms": unique_preserve(anchor_terms, limit=12),
+        "query_anchor_terms": unique_preserve(list(anchor_terms), limit=12),
         "actual_source_matched_terms": route_terms,
         "meaningful_matched_terms": route_terms,
         "anchor_quality": anchor_quality,

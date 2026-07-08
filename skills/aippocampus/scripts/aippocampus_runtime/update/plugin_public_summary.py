@@ -94,12 +94,19 @@ def _trusted_codex_next_actions(*, ok: bool, action_required: bool) -> list[dict
 def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
     """Return the user-reportable install/probe summary without local paths."""
 
-    plugin = result.get("plugin") if isinstance(result.get("plugin"), dict) else {}
-    host_probe = result.get("host_probe") if isinstance(result.get("host_probe"), dict) else {}
-    warning_summary = host_probe.get("warning_summary") if isinstance(host_probe, dict) else {}
+    raw_plugin = result.get("plugin")
+    raw_host_probe = result.get("host_probe")
+    plugin_map: dict[str, Any] = raw_plugin if isinstance(raw_plugin, dict) else {}
+    host_probe_map: dict[str, Any] = (
+        raw_host_probe if isinstance(raw_host_probe, dict) else {}
+    )
+    warning_summary = host_probe_map.get("warning_summary")
+    warning_summary_map = warning_summary if isinstance(warning_summary, dict) else {}
+    mcp_status = host_probe_map.get("mcp_status")
+    mcp_status_map = mcp_status if isinstance(mcp_status, dict) else {}
     tool_names = [
         str(item)
-        for item in ((host_probe.get("mcp_status") or {}).get("tool_names") or [])
+        for item in (mcp_status_map.get("tool_names") or [])
     ]
     key_tools = [
         name
@@ -113,19 +120,18 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
         if name in tool_names
     ]
     key_tool_smokes = [
-        item for item in host_probe.get("key_tool_smokes") or [] if isinstance(item, dict)
+        item for item in host_probe_map.get("key_tool_smokes") or [] if isinstance(item, dict)
     ]
     key_tool_failures = [item for item in key_tool_smokes if not item.get("ok")]
     ok = bool(result.get("ok"))
     agent_callable_status = result.get("agent_callable_status")
-    warning_counts = _warning_summary_counts(warning_summary)
-    mcp_preflight = (
-        result.get("mcp_command_preflight")
-        if isinstance(result.get("mcp_command_preflight"), dict)
-        else {}
+    warning_counts = _warning_summary_counts(warning_summary_map)
+    raw_mcp_preflight = result.get("mcp_command_preflight")
+    mcp_preflight_map: dict[str, Any] = (
+        raw_mcp_preflight if isinstance(raw_mcp_preflight, dict) else {}
     )
     action_required = _aippocampus_action_required(warning_counts, ok=ok) or _mcp_preflight_action_required(
-        mcp_preflight
+        mcp_preflight_map
     )
     return {
         "kind": "aippocampus_plugin_install_public_summary",
@@ -138,21 +144,21 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
             ok=ok,
             action_required=action_required,
             agent_callable_status=agent_callable_status,
-            mcp_preflight=mcp_preflight,
+            mcp_preflight=mcp_preflight_map,
         ),
         "trusted_codex_next_actions": _trusted_codex_next_actions(
             ok=ok,
             action_required=action_required,
         ),
         "plugin": {
-            "id": plugin.get("id"),
-            "version": plugin.get("version"),
-            "action": plugin.get("action"),
-            "installed": bool(plugin.get("installed")),
-            "enabled": bool(plugin.get("enabled")),
+            "id": plugin_map.get("id"),
+            "version": plugin_map.get("version"),
+            "action": plugin_map.get("action"),
+            "installed": bool(plugin_map.get("installed")),
+            "enabled": bool(plugin_map.get("enabled")),
         },
         "host_probe": {
-            "validation_ok": bool(host_probe.get("validation_ok")),
+            "validation_ok": bool(host_probe_map.get("validation_ok")),
             "tool_count": len(tool_names),
             "key_tools_present": key_tools,
             "key_tools_callable": None
@@ -162,11 +168,11 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
             "warning_summary": warning_counts,
         },
         "mcp_command_preflight": {
-            "status": mcp_preflight.get("status"),
-            "command": mcp_preflight.get("command"),
-            "resolves": bool(mcp_preflight.get("resolves")),
-            "primary_repair_command": mcp_preflight.get("primary_repair_command"),
-            "repair_options": list(mcp_preflight.get("repair_options") or [])[:3],
+            "status": mcp_preflight_map.get("status"),
+            "command": mcp_preflight_map.get("command"),
+            "resolves": bool(mcp_preflight_map.get("resolves")),
+            "primary_repair_command": mcp_preflight_map.get("primary_repair_command"),
+            "repair_options": list(mcp_preflight_map.get("repair_options") or [])[:3],
             "resolved_path_emitted": False,
         },
         "current_thread_mcp_boundary": {
