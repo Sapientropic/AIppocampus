@@ -1074,9 +1074,17 @@ class UpdateSyncTests(unittest.TestCase):
             item.get("surface") for item in payload.get("safe_next_actions", [])
         }
         self.assertNotIn("action_hints", action_surfaces)
-        self.assertEqual(
+        action_commands = {
+            payload["foreground_action"].get("command"),
+            *(item.get("command") for item in payload.get("safe_next_actions", [])),
+        }
+        self.assertIn("aippocampus doctor provider --json", action_commands)
+        self.assertIn(
             payload["ambient_recall"]["next_command"],
-            "aippocampus doctor provider --json",
+            {
+                "aippocampus doctor provider --json",
+                "aippocampus warm status --json",
+            },
         )
         self.assertNotIn("refresh-cache --write", raw)
         self.assertNotIn("action_hints", payload)

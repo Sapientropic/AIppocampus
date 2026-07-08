@@ -51,26 +51,84 @@ DEFAULT_TIMING_ARTIFACTS: tuple[Path, ...] = ()
 TIER_REPORT_TOP_LIMIT = 10
 RUNNER_VERSION = "aippocampus-run-tests-v2"
 TIMINGS_SCHEMA_VERSION = 2
-QUICK_BUDGET = {
-    "module_count_target": 46,
+
+
+class TierCountBudget(TypedDict):
+    module_count_target: int
+    test_count_target: int
+    elapsed_seconds_target: float
+    target_updated_at: str
+    target_owner: str
+    target_rationale: str
+    replacement_lane_note: str
+
+
+class BroadSuiteReviewTarget(TypedDict):
+    module_count_review_threshold: int
+    test_count_review_threshold: int
+    label: str
+    review_owner: str
+    review_decision_date: str
+    review_rationale: str
+
+
+QUICK_BUDGET: TierCountBudget = {
+    "module_count_target": 50,
     "test_count_target": 330,
     "elapsed_seconds_target": 30.0,
+    "target_updated_at": "2026-07-08",
+    "target_owner": "verification-steward",
+    "target_rationale": (
+        "Quick has grown by small, focused guard modules while staying far under "
+        "the test-count and timing targets; keep it as the local inner loop "
+        "instead of moving focused follow-through coverage to broad lanes."
+    ),
+    "replacement_lane_note": (
+        "Modules that outgrow quick should move to pr, smoke, integration, or a "
+        "planner-named focused command with an owner note."
+    ),
 }
-PR_BUDGET = {
-    "module_count_target": 70,
+PR_BUDGET: TierCountBudget = {
+    "module_count_target": 86,
     "test_count_target": 500,
     "elapsed_seconds_target": 180.0,
+    "target_updated_at": "2026-07-08",
+    "target_owner": "verification-steward",
+    "target_rationale": (
+        "PR keeps the canonical local closeout lane for planner, MCP, compact, "
+        "and recall follow-through guards; current growth is module-shaped, not "
+        "test-count-shaped, and remains below the PR timing budget."
+    ),
+    "replacement_lane_note": (
+        "Broad-pr, benchmark-smoke, integration, and focused planner commands "
+        "remain the replacement lanes for heavier coverage."
+    ),
 }
 BROAD_SUITE_REVIEW_TARGETS: dict[str, BroadSuiteReviewTarget] = {
     "broad-pr": {
-        "module_count_review_threshold": 300,
-        "test_count_review_threshold": 2500,
+        "module_count_review_threshold": 380,
+        "test_count_review_threshold": 3600,
         "label": "Broad PR",
+        "review_owner": "verification-steward",
+        "review_decision_date": "2026-07-08",
+        "review_rationale": (
+            "Accepted as a CI/pre-merge breadth lane, not an ordinary local "
+            "agent ritual; the current PR-head catalog has been re-counted with "
+            "reviewer-observed generated test cases included, and changed-surface "
+            "planning must still name focused commands before escalating here."
+        ),
     },
     "full": {
-        "module_count_review_threshold": 400,
-        "test_count_review_threshold": 3500,
+        "module_count_review_threshold": 460,
+        "test_count_review_threshold": 4400,
         "label": "Full",
+        "review_owner": "verification-steward",
+        "review_decision_date": "2026-07-08",
+        "review_rationale": (
+            "Accepted as the complete catalog/release audit lane after recent "
+            "coverage growth and reviewer-observed PR-head recounts; it remains "
+            "deferred from default local closeout."
+        ),
     },
 }
 
@@ -91,12 +149,6 @@ class ModuleTimingRow(TypedDict):
     test_count: int
     duration_seconds: float
     ok: bool
-
-
-class BroadSuiteReviewTarget(TypedDict):
-    module_count_review_threshold: int
-    test_count_review_threshold: int
-    label: str
 
 
 def _target_status(actual: int | float, target: int | float) -> str:
@@ -159,6 +211,10 @@ def count_budget_for_tier(
         ),
         "note": note,
         "tier_label": label,
+        "target_updated_at": budget["target_updated_at"],
+        "target_owner": budget["target_owner"],
+        "target_rationale": budget["target_rationale"],
+        "replacement_lane_note": budget["replacement_lane_note"],
     }
 
 
@@ -186,6 +242,9 @@ def suite_growth_review_for_tier(
         "module_count_status": _target_status(module_count, module_threshold),
         "test_count_status": _target_status(test_count, test_threshold),
         "top_contributors": top_modules[:5],
+        "review_owner": target["review_owner"],
+        "review_decision_date": target["review_decision_date"],
+        "review_rationale": target["review_rationale"],
         "recommended_action": (
             {
                 "id": f"review_{normalized_tier.replace('-', '_')}_suite_growth",
@@ -726,6 +785,10 @@ def _compact_budget(budget: object) -> dict[str, object] | None:
         "module_count_status": budget.get("module_count_status"),
         "test_count_status": budget.get("test_count_status"),
         "budget_outcome": budget.get("budget_outcome"),
+        "target_updated_at": budget.get("target_updated_at"),
+        "target_owner": budget.get("target_owner"),
+        "target_rationale": budget.get("target_rationale"),
+        "replacement_lane_note": budget.get("replacement_lane_note"),
     }
     return {key: value for key, value in row.items() if value not in (None, "", [], {})}
 
@@ -737,6 +800,9 @@ def _compact_growth_review(review: object) -> dict[str, object] | None:
         "status": review.get("status"),
         "module_count_review_threshold": review.get("module_count_review_threshold"),
         "test_count_review_threshold": review.get("test_count_review_threshold"),
+        "review_owner": review.get("review_owner"),
+        "review_decision_date": review.get("review_decision_date"),
+        "review_rationale": review.get("review_rationale"),
     }
     return {key: value for key, value in row.items() if value not in (None, "", [], {})}
 

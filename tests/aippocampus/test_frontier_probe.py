@@ -155,7 +155,11 @@ class FrontierProbeTests(unittest.TestCase):
                 ("source refs", "Active Path Packet", "same_decision_space", 0.94, "verified"),
             ]
         )
-        probes = frontier_probe.build_frontier_probes([journey_row()], graph)
+        probes = frontier_probe.build_frontier_probes(
+            [journey_row()],
+            graph,
+            now="2026-06-07T00:00:00Z",
+        )
 
         seeds = frontier_probe.frontier_probes_to_dream_seeds(probes)
 

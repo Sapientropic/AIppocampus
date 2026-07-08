@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime.recall import associative_path_foreground_gate as apw_gate
+from aippocampus_runtime.source.io_kernel import source_ref_identity_key
 from aippocampus_runtime.source.query_match_gate import query_match_gate
 
 
@@ -21,6 +22,61 @@ def primary_current_source_reopenable(memory_packets: list[dict[str, Any]]) -> b
     return str(primary.get("route_label") or "").casefold().startswith(
         "current_turn source route"
     )
+
+
+def primary_deepen_followthrough_reopenable(memory_packets: list[dict[str, Any]]) -> bool:
+    """Return whether the primary route is safe to expose as agent_deepen.
+
+    Low-specificity recall sometimes surfaces route-note navigation scents. A
+    route note is useful orientation, but it should not become the first
+    foreground `agent_deepen` action unless it carries joined clean-source
+    evidence that `agent_deepen` can reopen.
+    """
+
+    if not memory_packets:
+        return False
+    primary = memory_packets[0]
+    if primary.get("output_mode") != "reopenable_route":
+        return False
+    if not _route_note_like(primary):
+        return True
+    return _route_note_has_joined_source_ref(primary)
+
+
+def _route_note_like(packet: Mapping[str, Any]) -> bool:
+    markers = {
+        str(packet.get("route_kind") or ""),
+        str(packet.get("matched_cue_family") or ""),
+        str(packet.get("origin") or ""),
+        str(packet.get("route_origin") or ""),
+        str(packet.get("source") or ""),
+    }
+    return any("route_note" in marker.casefold() for marker in markers)
+
+
+def _route_note_has_joined_source_ref(packet: Mapping[str, Any]) -> bool:
+    for key in ("joined_evidence_refs", "source_refs"):
+        value = packet.get(key)
+        if isinstance(value, list) and any(_route_note_ref_reopenable(item) for item in value):
+            return True
+    source_ref = packet.get("source_ref")
+    return _source_ref_reopenable(source_ref)
+
+
+def _route_note_ref_reopenable(value: Any) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    nested = value.get("source_ref")
+    if _source_ref_reopenable(nested):
+        return True
+    return _source_ref_reopenable(value)
+
+
+def _source_ref_reopenable(value: Any) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    source_id, thread_key, message_id, turn_id, line = source_ref_identity_key(value)
+    return bool((source_id or thread_key) and (message_id or turn_id or line))
 
 
 def apw_card_allows_primary(

@@ -1317,8 +1317,12 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(provider_payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("cannot_claim", provider_payload)
         self.assertNotIn("boundary_detail", provider_payload)
-        self.assertIn("boundary_summary", provider_payload)
-        self.assertTrue(provider_payload["boundary_summary"]["full_detail_owns_diagnostics"])
+        self.assertNotIn("boundary_summary", provider_payload)
+        self.assertTrue(provider_payload["details_available"])
+        self.assertEqual(
+            provider_payload["safe_next_actions"][-1]["id"],
+            "inspect_provider_doctor_detail",
+        )
 
         self.assertEqual(aippo.returncode, 2, aippo.stderr)
         aippo_payload = parse_cli_json(self, aippo)

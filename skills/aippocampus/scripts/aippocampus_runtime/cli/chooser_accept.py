@@ -67,12 +67,12 @@ def chooser_tail_supported(tail: Sequence[str]) -> bool:
 
 def _action_candidates(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
-    for raw in [
-        payload.get("foreground_action"),
-        *(payload.get("safe_next_actions") or []),
-        *(payload.get("choices") if isinstance(payload.get("choices"), list) else []),
-        *(payload.get("write_actions") if isinstance(payload.get("write_actions"), list) else []),
-    ]:
+    raw_candidates: list[Any] = [payload.get("foreground_action")]
+    for key in ("safe_next_actions", "choices", "write_actions"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            raw_candidates.extend(value)
+    for raw in raw_candidates:
         if not isinstance(raw, Mapping):
             continue
         action = normalize_foreground_action(raw)

@@ -194,13 +194,13 @@ def build_total_hexagram_encoding(
     if explicit_reviewed_state is None:
         observed: dict[int, list[dict[str, Any]]] = {line: [] for line in range(1, 7)}
         for signal in line_signals:
-            line = _line_index(signal.get("line"))
+            line_index = _line_index(signal.get("line"))
             value = _line_value(signal.get("value"))
-            if line is None or value is None:
+            if line_index is None or value is None:
                 continue
             if _private_scope(signal):
                 blocked = True
-                observed[line].append(
+                observed[line_index].append(
                     {
                         "value": value,
                         "authority": "blocked",
@@ -210,7 +210,7 @@ def build_total_hexagram_encoding(
                 )
                 continue
             refs = _safe_refs(signal.get("source_refs"))
-            observed[line].append(
+            observed[line_index].append(
                 {
                     "value": value,
                     "authority": "source_backed" if refs else "unknown",
@@ -221,8 +221,8 @@ def build_total_hexagram_encoding(
         for line, rows in observed.items():
             if not rows:
                 continue
-            values = {row["value"] for row in rows}
-            if len(values) > 1:
+            row_values = {row["value"] for row in rows}
+            if len(row_values) > 1:
                 ambiguous = True
                 line_slots[line] = {
                     "line": line,
@@ -292,15 +292,24 @@ def build_total_hexagram_encoding(
             "symbolic_advice_included": False,
         },
     }
-    if complete:
-        lines_tuple = tuple(int(value) for value in known_values)  # type: ignore[arg-type]
+    complete_values = [value for value in known_values if value in (0, 1)]
+    if complete and len(complete_values) == 6:
+        line_values = tuple(int(value) for value in complete_values)
+        lines_tuple = (
+            line_values[0],
+            line_values[1],
+            line_values[2],
+            line_values[3],
+            line_values[4],
+            line_values[5],
+        )
         hexagram = hexagram_from_lines(lines_tuple)
         hexagram_projection = hexagram.to_public_dict()
         hexagram_projection["bits_bottom_to_top"] = hexagram_projection["bitstring_bottom_to_top"]
         result["hexagram"] = hexagram_projection
         result["macro_state_hint"] = _state_hint(
             project=project,
-            lines=lines_tuple,  # type: ignore[arg-type]
+            lines=lines_tuple,
             changing_lines=changing_lines,
             active_layer=active_layer,
             momentum=momentum,

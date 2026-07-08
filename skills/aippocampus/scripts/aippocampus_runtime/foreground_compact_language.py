@@ -34,8 +34,10 @@ COMPACT_POLICY_FIELD_DENYLIST = frozenset(
         "output_boundary",
         "policy_boundary",
         "privacy_boundary",
+        "risk_boundary",
         "source_boundary",
         "source_reopen_boundary",
+        "suppression_boundary",
         "write_boundary",
     }
 )

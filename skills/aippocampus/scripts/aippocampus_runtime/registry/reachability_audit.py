@@ -31,7 +31,8 @@ def _clean_source_messages_path(paths: Mapping[str, Any]) -> str:
 
 
 def _row_state(entry: Mapping[str, Any]) -> dict[str, bool]:
-    paths = entry.get("paths") if isinstance(entry.get("paths"), Mapping) else {}
+    raw_paths = entry.get("paths")
+    paths: Mapping[str, Any] = raw_paths if isinstance(raw_paths, Mapping) else {}
     provider_known = bool(
         str(entry.get("source_provider") or "").strip()
         or (isinstance(entry.get("session_meta"), Mapping) and entry.get("session_meta"))
@@ -57,8 +58,10 @@ def _count(rows: list[dict[str, bool]], key: str) -> int:
 
 
 def render_reachability_audit(report: Mapping[str, Any]) -> str:
-    counts = report.get("counts") if isinstance(report.get("counts"), Mapping) else {}
-    action = report.get("foreground_action") if isinstance(report.get("foreground_action"), Mapping) else {}
+    raw_counts = report.get("counts")
+    counts: Mapping[str, Any] = raw_counts if isinstance(raw_counts, Mapping) else {}
+    raw_action = report.get("foreground_action")
+    action: Mapping[str, Any] = raw_action if isinstance(raw_action, Mapping) else {}
     next_action = action.get("command") or action.get("command_template")
     lines = [
         f"registry source reachability: {report.get('status')}",
@@ -162,12 +165,7 @@ def registry_source_reachability_audit(
             }
             for entry, state in zip(entries, row_states, strict=True)
         ]
-    report.update(
-        canonical_foreground_action_fields(
-            actions[0] if actions else None,
-            safe_next_actions=actions,
-        )
-    )
+    report.update(canonical_foreground_action_fields(actions[0], safe_next_actions=actions))
     return report if include_paths else redact_private_paths(report)
 
 

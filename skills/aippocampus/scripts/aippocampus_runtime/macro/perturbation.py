@@ -172,7 +172,9 @@ def build_perturbation_packet(
         reason_codes.append("inversion_requires_source_reopen_or_conflict_review")
     if policy.get("stale_conflict_checks_required"):
         reason_codes.append("stale_conflict_checks_required")
-    for reason in layer_diagnostics["reason_codes"]:
+    raw_layer_reasons = layer_diagnostics.get("reason_codes")
+    layer_reasons = raw_layer_reasons if isinstance(raw_layer_reasons, list) else []
+    for reason in layer_reasons:
         if reason not in reason_codes:
             reason_codes.append(str(reason))
 

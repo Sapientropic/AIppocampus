@@ -8,6 +8,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from aippocampus_runtime import core
+from aippocampus_runtime.mcp.current_source_route_policy import (
+    primary_deepen_followthrough_reopenable,
+)
 from aippocampus_runtime.source import search
 from aippocampus_runtime.source.current_source_window import open_current_thread_source_window
 from tests.aippocampus.product_probe_helpers import call_mcp_tool_payload
@@ -191,6 +194,61 @@ class RouteNoteRecallPathTests(unittest.TestCase):
             if isinstance(message, dict)
         )
         self.assertIn("Joined final anchor RN-42", window_text)
+
+    def test_route_note_primary_deepen_rejects_malformed_source_ref_containers(self) -> None:
+        for packet in (
+            {
+                "output_mode": "reopenable_route",
+                "route_kind": "route_note",
+                "source_refs": [{}],
+            },
+            {
+                "output_mode": "reopenable_route",
+                "route_kind": "route_note",
+                "joined_evidence_refs": [{"kind": "not_a_source"}],
+            },
+            {
+                "output_mode": "reopenable_route",
+                "route_kind": "route_note",
+                "source_refs": [{"line": 12}],
+            },
+        ):
+            self.assertFalse(primary_deepen_followthrough_reopenable([packet]))
+
+        self.assertTrue(
+            primary_deepen_followthrough_reopenable(
+                [
+                    {
+                        "output_mode": "reopenable_route",
+                        "route_kind": "route_note",
+                        "joined_evidence_refs": [
+                            {
+                                "source_ref": {
+                                    "thread_key": "session:route-note",
+                                    "message_id": "msg-route-note",
+                                }
+                            }
+                        ],
+                    }
+                ]
+            )
+        )
+        self.assertTrue(
+            primary_deepen_followthrough_reopenable(
+                [
+                    {
+                        "output_mode": "reopenable_route",
+                        "route_kind": "route_note",
+                        "source_refs": [
+                            {
+                                "source_id": "clean:route-note",
+                                "message_id": "msg-route-note",
+                            }
+                        ],
+                    }
+                ]
+            )
+        )
 
 
 if __name__ == "__main__":

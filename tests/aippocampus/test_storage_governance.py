@@ -309,7 +309,8 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertFalse(payload["privacy"]["raw_session_like_ids_emitted"])
         self.assertNotIn("session-one", encoded)
         self.assertNotIn("session:one", encoded)
-        self.assertEqual(payload["full_audit_flag"], "--full")
+        self.assertTrue(payload["details_available"])
+        self.assertNotIn("full_audit_flag", payload)
 
     def test_dry_run_summary_json_is_foreground_bounded(self) -> None:
         with patch("sys.stdout", new=StringIO()) as stdout:
@@ -351,27 +352,20 @@ class StorageGovernanceTests(unittest.TestCase):
             "aippocampus storage gc --dry-run --json --top 1 --cwd .",
         )
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
-        self.assertEqual(action_ids[:2], ["apply_rebuildable_after_audit", "stop_without_cleanup"])
+        self.assertEqual(action_ids, ["stop_without_cleanup"])
         self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
-        self.assertEqual(
-            payload["safe_next_actions"][0]["mutation_risk"],
-            "explicit_local_delete_of_rebuildable_cache",
-        )
-        self.assertTrue(payload["safe_next_actions"][0]["requires_prior_audit"])
-        self.assertIn("deterministic_checks", payload["safe_next_actions"][0])
-        self.assertIn("rollback_or_rebuild_boundary", payload["safe_next_actions"][0])
-        self.assertTrue(payload["safe_next_actions"][1]["continue_without_command"])
-        self.assertNotIn("command", payload["safe_next_actions"][1])
+        self.assertNotIn("claim_boundary", payload["foreground_action"])
+        self.assertTrue(payload["safe_next_actions"][0]["continue_without_command"])
+        self.assertNotIn("command", payload["safe_next_actions"][0])
+        self.assertNotIn("claim_boundary", payload["safe_next_actions"][0])
         self.assertTrue(payload["safe_next_action"]["continue_without_command"])
         self.assertEqual(
             payload["safe_next_action"]["instruction"],
             "Continue the user's foreground work without running storage cleanup.",
         )
-        self.assertEqual(
-            payload["comparable_metrics_command"],
-            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
-        )
-        self.assertEqual(payload["risk_boundary"]["apply_requires_explicit_flag"], True)
+        self.assertTrue(payload["details_available"])
+        self.assertNotIn("comparable_metrics_command", payload)
+        self.assertNotIn("risk_boundary", payload)
         self.assertFalse(payload["privacy"]["raw_session_like_ids_emitted"])
         self.assertNotIn("session-one", encoded)
         self.assertNotIn("session:one", encoded)
@@ -434,30 +428,19 @@ class StorageGovernanceTests(unittest.TestCase):
             payload["foreground_action"]["command"],
             "aippocampus storage gc --dry-run --json --top 1 --cwd .",
         )
-        self.assertIn(
-            "stop_without_cleanup",
+        self.assertEqual(
             [action["id"] for action in payload["safe_next_actions"]],
+            ["stop_without_cleanup"],
         )
         self.assertNotIn(
             "apply_rebuildable_after_audit",
             [action["id"] for action in payload["safe_next_actions"]],
         )
-        retention_action = next(
-            action
-            for action in payload["safe_next_actions"]
-            if action["id"] == "generate_retention_report"
-        )
-        self.assertIn("aippocampus_runtime.ops.retention_report", retention_action["command"])
         self.assertTrue(payload["safe_next_action"]["continue_without_command"])
         self.assertNotIn("command", payload["safe_next_action"])
-        self.assertEqual(
-            payload["comparable_metrics_command"],
-            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
-        )
-        self.assertEqual(
-            payload["operator_audit_command"],
-            "aippocampus storage gc --dry-run --json --full --cwd .",
-        )
+        self.assertTrue(payload["details_available"])
+        self.assertNotIn("comparable_metrics_command", payload)
+        self.assertNotIn("operator_audit_command", payload)
 
     def test_default_json_without_existing_reports_is_bounded_foreground_card(self) -> None:
         with patch("sys.stdout", new=StringIO()) as stdout:
@@ -480,16 +463,19 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertEqual(payload["surface_class"], "foreground_storage_gc_plan")
         self.assertEqual(payload["candidate_count_total"], 1)
         self.assertEqual(payload["candidates_returned"], 1)
-        self.assertEqual(payload["full_audit_flag"], "--full")
+        self.assertTrue(payload["details_available"])
+        self.assertNotIn("full_audit_flag", payload)
         self.assertFalse(payload["privacy"]["raw_session_like_ids_emitted"])
         self.assertEqual(payload["foreground_action"]["id"], "bounded_storage_audit")
         self.assertTrue(payload["foreground_action"]["continue_without_command"])
         self.assertNotIn("command", payload["foreground_action"])
+        self.assertNotIn("claim_boundary", payload["foreground_action"])
         self.assertEqual(payload["safe_next_actions"][0]["id"], "preview_storage_gc_summary")
         self.assertEqual(
             payload["safe_next_actions"][0]["command"],
             "aippocampus storage gc --dry-run --summary-json --cwd .",
         )
+        self.assertNotIn("claim_boundary", payload["safe_next_actions"][0])
 
     def test_dry_run_falls_back_to_capacity_aggregate_when_retention_report_is_missing(
         self,
@@ -628,16 +614,12 @@ class StorageGovernanceTests(unittest.TestCase):
             payload["metrics"]["reclaimable_rebuildable_bytes"],
             13,
         )
-        self.assertIn(
+        self.assertTrue(payload["details_available"])
+        self.assertEqual(payload["foreground_action"]["id"], "bounded_storage_audit")
+        self.assertNotIn(
             "apply_rebuildable_after_audit",
             [item["id"] for item in payload["safe_next_actions"]],
         )
-        apply_action = next(
-            item
-            for item in payload["safe_next_actions"]
-            if item["id"] == "apply_rebuildable_after_audit"
-        )
-        self.assertIn("--include-active", apply_action["command"])
 
     def test_capacity_fallback_cli_redacts_session_like_ids_by_default(self) -> None:
         with patch("sys.stdout", new=StringIO()) as stdout:
